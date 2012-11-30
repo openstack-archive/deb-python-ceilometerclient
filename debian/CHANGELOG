@@ -1,0 +1,49 @@
+commit 956259fbf8eb127e7548f04eb1ff18964c08444f
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Fri Nov 30 15:10:42 2012 +1100
+
+    Revert "Remove the event class and use Meter instead."
+    
+    Just rename Event to Sample
+    
+    This reverts commit 46cedbcf1e0f7a329b8a895e1f97ca8b817dd319.
+
+commit 46cedbcf1e0f7a329b8a895e1f97ca8b817dd319
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Fri Nov 30 13:31:47 2012 +1100
+
+    Remove the event class and use Meter instead.
+    
+    Signed-off-by: Angus Salkeld <asalkeld@redhat.com>
+
+commit 2ae6238fe974cfe983be68e69fd3d8846af063a2
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Fri Nov 30 13:20:43 2012 +1100
+
+    Make sure the version is prepended
+    
+    Signed-off-by: Angus Salkeld <asalkeld@redhat.com>
+
+commit 16357a15abb38a70c94f829fdb3db8693b9c54ca
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Fri Nov 30 13:20:21 2012 +1100
+
+    Fix the default service_type
+    
+    Signed-off-by: Angus Salkeld <asalkeld@redhat.com>
+
+commit 635bc921dbf0fe0c65d5ec84a6cd327e83550e40
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Fri Nov 9 23:31:27 2012 +1100
+
+    Add basic functionality
+    
+    Signed-off-by: Angus Salkeld <asalkeld@redhat.com>
+
+commit 098f944eda406a2741c8d0f3546ea318421340bf
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Fri Nov 9 12:52:21 2012 +1100
+
+    Initial Commit
+    
+    Signed-off-by: Angus Salkeld <asalkeld@redhat.com>
