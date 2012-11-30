@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+
+MANIFEST_EXCLUDE_STANDARD := ceilometerclient
+UPSTREAM_GIT := git://github.com/asalkeld/python-ceilometerclient.git
+
+include /usr/share/openstack-pkg-tools/pkgos.make
+
+%:
+	dh $@  --with python2
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	set -e ; for pyversion in $(shell pyversions -r); do $$pyversion setup.py test; done
+endif

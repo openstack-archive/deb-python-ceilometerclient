@@ -1,0 +1,42 @@
+Source: python-ceilometerclient
+Section: python
+Priority: extra
+Maintainer: PKG OpenStack <openstack-devel@lists.alioth.debian.org>
+Uploaders: Julien Danjou <acid@debian.org>,
+           Thomas Goirand <zigo@debian.org>,
+           Ghe Rivero <ghe.rivero@stackops.com>,
+           Mehdi Abaakouk <sileht@sileht.net>
+Build-Depends: debhelper (>= 9),
+ python-all (>= 2.6.6-3~)
+Build-Depends-Indep: openstack-pkg-tools,
+ pep8,
+ python-httplib2,
+ python-keystoneclient,
+ python-setuptools,
+ python-setuptools-git,
+ python-sphinx
+Standards-Version: 3.9.3
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-ceilometerclient.git;a=summary
+Vcs-Git: git://anonscm.debian.org/openstack/python-ceilometerclient.git
+Homepage: http://www.openstack.org
+
+Package: python-ceilometerclient
+Architecture: all
+Pre-Depends: dpkg (>= 1.15.6~)
+Depends: python-httplib2,
+ python-keystoneclient,
+ python-prettytable,
+ python-setuptools,
+ ${misc:Depends},
+ ${python:Depends}
+Description: Client library for Openstack Ceilometer API server
+ Ceilometer aims to deliver a unique point of contact for billing systems to  
+ aquire all counters they need to establish customer billing, accross all
+ current and future OpenStack components. The delivery of counters must be
+ tracable and auditable, the counters must be easily extensible to support new
+ projects, and agents doing data collections should be independent of the
+ overall system.
+ .
+ This is a client for the Ceilometer which uses the OpenStack Image API.
+ There's a Python API (the "ceilometerclient" module), and a command-line
+ script ("ceilometer").
