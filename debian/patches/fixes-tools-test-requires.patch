@@ -1,0 +1,16 @@
+Description: fixes-tools-test-requires.patch
+Author: Thomas Goirand <zigo@debian.org>
+Forwarded: no
+
+--- python-ceilometerclient-0.orig/tools/test-requires
++++ python-ceilometerclient-0/tools/test-requires
+@@ -1,4 +1,4 @@
+-distribute>=0.6.24
++distribute
+ 
+ mox
+ nose
+--- /dev/null
++++ python-ceilometerclient-0/ceilometerclient/versioninfo
+@@ -0,0 +1 @@
++0.2.gb440ba9
