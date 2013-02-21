@@ -3,7 +3,6 @@
 #export DH_VERBOSE=1
 
 MANIFEST_EXCLUDE_STANDARD := ceilometerclient
-UPSTREAM_GIT := git://github.com/asalkeld/python-ceilometerclient.git
 
 include /usr/share/openstack-pkg-tools/pkgos.make
 
