@@ -1,5 +1,5 @@
 python-ceilometerclient (0~git+d740e376-1) experimental; urgency=low
 
-  * Initial release.
+  * Initial release (Closes: #701064).
 
  -- Thomas Goirand <zigo@debian.org>  Fri, 30 Nov 2012 17:15:12 +0000
