@@ -18,7 +18,7 @@ Build-Depends-Indep: pep8,
  python-nosexcover,
  python-prettytable (>= 0.6),
  python-prettytable (<< 0.7),
- python-setuptools,
+ python-setuptools (>= 0.6.24),
  python-setuptools-git,
  python-sphinx,
  python-warlock
