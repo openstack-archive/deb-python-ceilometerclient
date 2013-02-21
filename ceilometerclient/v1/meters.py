@@ -15,6 +15,7 @@
 
 from ceilometerclient.common import base
 
+
 class User(base.Resource):
     def __init__(self, manager, info, loaded=False):
         _d = {unicode('user_id'): info}
@@ -73,19 +74,24 @@ class ResourceManager(base.Manager):
     def list(self, **kwargs):
         u = kwargs.get('user_id')
         s = kwargs.get('source')
+        opts = kwargs.get('metaquery')
         if u:
             path = '/users/%s/resources' % (u)
         elif s:
             path = '/sources/%s/resources' % (s)
         else:
             path = '/resources'
-        return self._list('/v1/%s' % path, 'resources')
+        if opts:
+            path = '/v1%s?%s' % (path, '&'.join(opts.split(':')))
+        else:
+            path = '/v1%s' % (path)
+        return self._list(path, 'resources')
 
 
 class Sample(base.Resource):
     def __init__(self, manager, info, loaded=False):
         smaller = dict((k, v) for (k, v) in info.iteritems()
-                              if k not in ('metadata', 'message_signature'))
+                       if k not in ('metadata', 'message_signature'))
         super(Sample, self).__init__(manager, smaller, loaded)
 
     def __repr__(self):
@@ -104,6 +110,7 @@ class SampleManager(base.Manager):
         u = kwargs.get('user_id')
         p = kwargs.get('project_id')
         s = kwargs.get('source')
+        opts = kwargs.get('metaquery')
         if r:
             path = '/resources/%s/meters/%s' % (r, c)
         elif u:
@@ -115,7 +122,11 @@ class SampleManager(base.Manager):
         else:
             path = '/meters'
 
-        return self._list('/v1/%s' % path, 'events')
+        if opts:
+            path = '/v1%s?%s' % (path, '&'.join(opts.split(':')))
+        else:
+            path = '/v1%s' % (path)
+        return self._list(path, 'events')
 
 
 class Meter(base.Resource):
@@ -134,6 +145,7 @@ class MeterManager(base.Manager):
         u = kwargs.get('user_id')
         p = kwargs.get('project_id')
         s = kwargs.get('source')
+        opts = kwargs.get('metaquery')
         if u:
             path = '/users/%s/meters' % u
         elif r:
@@ -144,4 +156,8 @@ class MeterManager(base.Manager):
             path = '/sources/%s/meters' % s
         else:
             path = '/meters'
-        return self._list('/v1/%s' % path, 'meters')
+        if opts:
+            path = '/v1%s?%s' % (path, '&'.join(opts.split(':')))
+        else:
+            path = '/v1%s' % (path)
+        return self._list(path, 'meters')
