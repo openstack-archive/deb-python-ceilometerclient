@@ -1,4 +1,4 @@
-python-ceilometerclient (0-1) experimental; urgency=low
+python-ceilometerclient (0~git+d740e376-1) experimental; urgency=low
 
   * Initial release.
 
