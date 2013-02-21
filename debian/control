@@ -22,6 +22,7 @@ Build-Depends-Indep: pep8,
  python-setuptools (>= 0.6.24),
  python-setuptools-git,
  python-sphinx,
+ python-unittest2,
  python-warlock
 Standards-Version: 3.9.4
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-ceilometerclient.git;a=summary
