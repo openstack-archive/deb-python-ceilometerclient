@@ -16,3 +16,7 @@ ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 #	set -e ; for pyversion in $(shell pyversions -r); do $$pyversion setup.py test; done
 	echo "No test for now"
 endif
+
+override_dh_clean:
+	dh_clean
+	rm -rf setuptools_git-*-py2*.egg
