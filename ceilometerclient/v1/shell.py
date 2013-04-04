@@ -29,6 +29,12 @@ import ceilometerclient.exc as exc
            help='ID of the project to show samples for.')
 @utils.arg('-c', '--counter_name', metavar='<NAME>',
            help='Name of meter to show samples for.')
+@utils.arg('--start', metavar='<START_TIMESTAMP>',
+           help='ISO date in UTC which limits events by '
+           'timestamp >= this value')
+@utils.arg('--end', metavar='<END_TIMESTAMP>',
+           help='ISO date in UTC which limits events by '
+           'timestamp <= this value')
 def do_sample_list(cc, args):
     '''List the samples for this meters'''
     fields = {'counter_name': args.counter_name,
@@ -36,6 +42,8 @@ def do_sample_list(cc, args):
               'user_id': args.user_id,
               'project_id': args.project_id,
               'source': args.source,
+              'start_timestamp': args.start,
+              'end_timestamp': args.end,
               'metaquery': args.metaquery}
     try:
         samples = cc.samples.list(**fields)
@@ -49,6 +57,8 @@ def do_sample_list(cc, args):
                          sortby=0)
 
 
+@utils.arg('-m', '--metaquery', metavar='<METAQUERY>',
+           help='Query into the metadata metadata.key=value:..')
 @utils.arg('-s', '--source', metavar='<SOURCE>',
            help='ID of the resource to show samples for.')
 @utils.arg('-r', '--resource_id', metavar='<RESOURCE_ID>',
@@ -71,9 +81,11 @@ def do_meter_list(cc, args={}):
                      sortby=0)
 
 
+@utils.arg('-s', '--source', metavar='<SOURCE>',
+           help='ID of the resource to show projects for.')
 def do_user_list(cc, args={}):
     '''List the users'''
-    kwargs = {}
+    kwargs = {'source': args.source}
     users = cc.users.list(**kwargs)
     field_labels = ['User ID']
     fields = ['user_id']
@@ -85,10 +97,24 @@ def do_user_list(cc, args={}):
            help='ID of the resource to show for.')
 @utils.arg('-u', '--user_id', metavar='<USER_ID>',
            help='ID of the user to show resources for.')
+@utils.arg('-p', '--project_id', metavar='<PROJECT_ID>',
+           help='ID of the project to show samples for.')
+@utils.arg('-m', '--metaquery', metavar='<METAQUERY>',
+           help='Query into the metadata metadata.key=value:..')
+@utils.arg('--start', metavar='<START_TIMESTAMP>',
+           help='ISO date in UTC which limits resouces by '
+           'last update time >= this value')
+@utils.arg('--end', metavar='<END_TIMESTAMP>',
+           help='ISO date in UTC which limits resouces by '
+           'last update time <= this value')
 def do_resource_list(cc, args={}):
-    '''List the users'''
+    '''List the resources'''
     kwargs = {'source': args.source,
-              'user_id': args.user_id}
+              'user_id': args.user_id,
+              'project_id': args.project_id,
+              'start_timestamp': args.start,
+              'end_timestamp': args.end,
+              'metaquery': args.metaquery}
     resources = cc.resources.list(**kwargs)
 
     field_labels = ['Resource ID', 'Source', 'User ID', 'Project ID']

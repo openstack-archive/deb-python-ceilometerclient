@@ -26,7 +26,7 @@ fixtures = {
             {'resources': [
                 {
                     'resource_id': 'a',
-                    'project_id': 'dig_the_ditch',
+                    'project_id': 'project_bla',
                     'user_id': 'freddy',
                     'timestamp': 'now',
                     'meter': ['this', 'that'],
@@ -73,6 +73,36 @@ fixtures = {
             ]},
         ),
     },
+    '/v1/projects/project_bla/resources': {
+        'GET': (
+            {},
+            {'resources': [
+                {
+                    'resource_id': 'a',
+                    'project_id': 'project_bla',
+                    'user_id': 'freddy',
+                    'timestamp': 'now',
+                    'meter': ['this', 'that'],
+                    'metadata': {'zxc_id': 'bla'},
+                },
+            ]},
+        ),
+    },
+    '/v1/resources?start_timestamp=now&end_timestamp=now': {
+        'GET': (
+            {},
+            {'resources': [
+                {
+                    'resource_id': 'b',
+                    'project_id': 'dig_the_ditch',
+                    'user_id': 'joey',
+                    'timestamp': 'now',
+                    'meter': ['this', 'that'],
+                    'metadata': {'zxc_id': 'foo'},
+                },
+            ]},
+        ),
+    },
 }
 
 
@@ -105,6 +135,24 @@ class ResourceManagerTest(unittest.TestCase):
         resources = list(self.mgr.list(metaquery='metadata.zxc_id=foo'))
         expect = [
             ('GET', '/v1/resources?metadata.zxc_id=foo', {}, None),
+        ]
+        self.assertEqual(self.api.calls, expect)
+        self.assertEqual(len(resources), 1)
+        self.assertEqual(resources[0].resource_id, 'b')
+
+    def test_list_by_project(self):
+        resources = list(self.mgr.list(project_id='project_bla'))
+        expect = [
+            ('GET', '/v1/projects/project_bla/resources', {}, None),
+        ]
+        self.assertEqual(self.api.calls, expect)
+        self.assertEqual(len(resources), 1)
+        self.assertEqual(resources[0].resource_id, 'a')
+
+    def test_list_by_timestamp(self):
+        resources = list(self.mgr.list(start_timestamp='now', end_timestamp='now'))
+        expect = [
+            ('GET', '/v1/resources?start_timestamp=now&end_timestamp=now', {}, None),
         ]
         self.assertEqual(self.api.calls, expect)
         self.assertEqual(len(resources), 1)

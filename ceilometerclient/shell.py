@@ -58,8 +58,8 @@ class CeilometerShell(object):
         parser.add_argument('-k', '--insecure',
                             default=False,
                             action='store_true',
-                            help="Explicitly allow glanceclient to perform "
-                            "\"insecure\" SSL (https) requests. "
+                            help="Explicitly allow ceilometerclient to "
+                            "perform \"insecure\" SSL (https) requests. "
                             "The server's certificate will "
                             "not be verified against any certificate "
                             "authorities. This option should be used with "
@@ -78,7 +78,7 @@ class CeilometerShell(object):
         parser.add_argument('--ca-file',
                             help='Path of CA SSL certificate(s) used to verify'
                             ' the remote server certificate. Without this '
-                            'option glance looks for the default system '
+                            'option ceilometer looks for the default system '
                             'CA certificates.')
 
         parser.add_argument('--timeout',
@@ -226,10 +226,6 @@ class CeilometerShell(object):
                 level=logging.DEBUG)
 
             httplib2.debuglevel = 1
-        else:
-            logging.basicConfig(
-                format="%(levelname)s %(message)s",
-                level=logging.INFO)
 
     def main(self, argv):
         # Parse args once to find version
@@ -256,38 +252,44 @@ class CeilometerShell(object):
             self.do_help(args)
             return 0
 
-        if not args.os_username:
-            raise exc.CommandError("You must provide a username via"
-                                   " either --os-username or env[OS_USERNAME]")
+        if args.os_auth_token and args.ceilometer_url:
+            token = args.os_auth_token
+            endpoint = args.ceilometer_url
+        else:
+            if not args.os_username:
+                raise exc.CommandError("You must provide a username via "
+                                       "either --os-username or via "
+                                       "env[OS_USERNAME]")
 
-        if not args.os_password:
-            raise exc.CommandError("You must provide a password via"
-                                   " either --os-password or env[OS_PASSWORD]")
+            if not args.os_password:
+                raise exc.CommandError("You must provide a password via "
+                                       "either --os-password or via "
+                                       "env[OS_PASSWORD]")
 
-        if not (args.os_tenant_id or args.os_tenant_name):
-            raise exc.CommandError("You must provide a tenant_id via"
-                                   " either --os-tenant-id or via "
-                                   "env[OS_TENANT_ID]")
+            if not (args.os_tenant_id or args.os_tenant_name):
+                raise exc.CommandError("You must provide a tenant_id via "
+                                       "either --os-tenant-id or via "
+                                       "env[OS_TENANT_ID]")
 
-        if not args.os_auth_url:
-            raise exc.CommandError("You must provide an auth url via"
-                                   " either --os-auth-url or via "
-                                   "env[OS_AUTH_URL]")
-        kwargs = {
-            'username': args.os_username,
-            'password': args.os_password,
-            'tenant_id': args.os_tenant_id,
-            'tenant_name': args.os_tenant_name,
-            'auth_url': args.os_auth_url,
-            'service_type': args.os_service_type,
-            'endpoint_type': args.os_endpoint_type,
-            'insecure': args.insecure
-        }
-        _ksclient = self._get_ksclient(**kwargs)
-        token = args.os_auth_token or _ksclient.auth_token
+            if not args.os_auth_url:
+                raise exc.CommandError("You must provide an auth url via "
+                                       "either --os-auth-url or via "
+                                       "env[OS_AUTH_URL]")
+            kwargs = {
+                'username': args.os_username,
+                'password': args.os_password,
+                'tenant_id': args.os_tenant_id,
+                'tenant_name': args.os_tenant_name,
+                'auth_url': args.os_auth_url,
+                'service_type': args.os_service_type,
+                'endpoint_type': args.os_endpoint_type,
+                'insecure': args.insecure
+            }
+            _ksclient = self._get_ksclient(**kwargs)
+            token = args.os_auth_token or _ksclient.auth_token
 
-        endpoint = args.ceilometer_url or \
-            self._get_endpoint(_ksclient, **kwargs)
+            endpoint = args.ceilometer_url or \
+                self._get_endpoint(_ksclient, **kwargs)
 
         kwargs = {
             'token': token,
