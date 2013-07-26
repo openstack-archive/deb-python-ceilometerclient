@@ -17,10 +17,10 @@
 #    under the License.
 
 import copy
-import unittest
+import testtools
 
+from ceilometerclient.tests import utils
 import ceilometerclient.v2.alarms
-from tests import utils
 
 
 AN_ALARM = {u'alarm_actions': [u'http://site:8000/alarm'],
@@ -45,7 +45,6 @@ AN_ALARM = {u'alarm_actions': [u'http://site:8000/alarm'],
 CREATE_ALARM = copy.deepcopy(AN_ALARM)
 del CREATE_ALARM['timestamp']
 del CREATE_ALARM['state_timestamp']
-del CREATE_ALARM['matching_metadata']
 del CREATE_ALARM['alarm_id']
 DELTA_ALARM = {u'alarm_actions': ['url1', 'url2'],
                u'comparison_operator': u'lt',
@@ -94,9 +93,10 @@ fixtures = {
 }
 
 
-class AlarmManagerTest(unittest.TestCase):
+class AlarmManagerTest(testtools.TestCase):
 
     def setUp(self):
+        super(AlarmManagerTest, self).setUp()
         self.api = utils.FakeAPI(fixtures)
         self.mgr = ceilometerclient.v2.alarms.AlarmManager(self.api)
 

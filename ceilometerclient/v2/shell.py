@@ -16,6 +16,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import json
+
 from ceilometerclient.common import utils
 from ceilometerclient import exc
 from ceilometerclient.v2 import options
@@ -76,6 +78,41 @@ def do_sample_list(cc, args):
                          sortby=0)
 
 
+@utils.arg('--project-id', metavar='<PROJECT_ID>',
+           help='Tenant to associate with alarm '
+                '(only settable by admin users)')
+@utils.arg('--user-id', metavar='<USER_ID>',
+           help='User to associate with alarm '
+                '(only settable by admin users)')
+@utils.arg('-r', '--resource-id', metavar='<RESOURCE_ID>',
+           help='ID of the resource.')
+@utils.arg('-m', '--meter-name', metavar='<METER_NAME>',
+           help='the meter name')
+@utils.arg('--meter-type', metavar='<METER_TYPE>',
+           help='the meter type')
+@utils.arg('--meter-unit', metavar='<METER_UNIT>',
+           help='the meter unit')
+@utils.arg('--sample-volume', metavar='<SAMPLE_VOLUME>',
+           help='The sample volume')
+@utils.arg('--resource-metadata', metavar='<RESOURCE_METADATA>',
+           help='resource metadata')
+def do_sample_create(cc, args={}):
+    '''Create a sample.'''
+    arg_to_field_mapping = {'meter_name': 'counter_name',
+                            'meter_unit': 'counter_unit',
+                            'meter_type': 'counter_type',
+                            'sample_volume': 'counter_volume'}
+    fields = {}
+    for var in vars(args).items():
+        k, v = var[0], var[1]
+        if v is not None:
+            if k == 'resource_metadata':
+                fields[k] = json.loads(v)
+            else:
+                fields[arg_to_field_mapping.get(k, k)] = v
+    cc.samples.create(**fields)
+
+
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]value; list.')
 def do_meter_list(cc, args={}):
@@ -110,7 +147,8 @@ def _display_alarm(alarm):
     fields = ['name', 'description', 'counter_name', 'period',
               'evaluation_periods', 'threshold', 'comparison_operator',
               'state', 'enabled', 'alarm_id', 'user_id', 'project_id',
-              'alarm_actions', 'ok_actions', 'insufficient_data_actions']
+              'alarm_actions', 'ok_actions', 'insufficient_data_actions',
+              'matching_metadata']
     data = dict([(f, getattr(alarm, f, '')) for f in fields])
     utils.print_dict(data, wrap=72)
 
@@ -167,9 +205,14 @@ def do_alarm_show(cc, args={}):
            metavar='<Webhook URL>', action='append', default=None,
            help=('URL to invoke when state transitions to unkown. '
                  'May be used multiple times.'))
+@utils.arg('--matching-metadata', dest='matching_metadata',
+           metavar='<Matching Metadata>', action='append', default=None,
+           help=('A meter should match this resource metadata (key=value)'
+                 'additionnal to the counter_name'))
 def do_alarm_create(cc, args={}):
     '''Create a new alarm.'''
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_dict(fields, "matching_metadata")
     alarm = cc.alarms.create(**fields)
     _display_alarm(alarm)
 
@@ -206,9 +249,14 @@ def do_alarm_create(cc, args={}):
            metavar='<Webhook URL>', action='append', default=None,
            help=('URL to invoke when state transitions to unkown. '
                  'May be used multiple times.'))
+@utils.arg('--matching-metadata', dest='matching_metadata',
+           metavar='<Matching Metadata>', action='append', default=None,
+           help=('A meter should match this resource metadata (key=value)'
+                 'additionnal to the counter_name'))
 def do_alarm_update(cc, args={}):
     '''Update an existing alarm.'''
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_dict(fields, "matching_metadata")
     fields.pop('alarm_id')
     alarm = cc.alarms.update(args.alarm_id, **fields)
     _display_alarm(alarm)
