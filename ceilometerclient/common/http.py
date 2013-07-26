@@ -58,7 +58,8 @@ class HTTPClient(object):
         parts = urlparse.urlparse(endpoint)
 
         _args = (parts.hostname, parts.port, parts.path)
-        _kwargs = {'timeout': float(kwargs.get('timeout', 600))}
+        _kwargs = {'timeout': (float(kwargs.get('timeout'))
+                               if kwargs.get('timeout') else 600)}
 
         if parts.scheme == 'https':
             _class = VerifiedHTTPSConnection
@@ -77,7 +78,7 @@ class HTTPClient(object):
     def get_connection(self):
         _class = self.connection_params[0]
         try:
-            return _class(*self.connection_params[1],
+            return _class(*self.connection_params[1][0:2],
                           **self.connection_params[2])
         except httplib.InvalidURL:
             raise exc.InvalidEndpoint()
@@ -124,7 +125,7 @@ class HTTPClient(object):
         return '%s/%s' % (base_url.rstrip('/'), url.lstrip('/'))
 
     def _http_request(self, url, method, **kwargs):
-        """ Send an http request with the specified characteristics.
+        """Send an http request with the specified characteristics.
 
         Wrapper around httplib.HTTP(S)Connection.request to handle tasks such
         as setting headers and error handling.
@@ -180,8 +181,12 @@ class HTTPClient(object):
             kwargs['body'] = json.dumps(kwargs['body'])
 
         resp, body_iter = self._http_request(url, method, **kwargs)
+        content_type = resp.getheader('content-type', None)
 
-        if 'application/json' in resp.getheader('content-type', None):
+        if resp.status == 204 or resp.status == 205 or content_type is None:
+            return resp, list()
+
+        if 'application/json' in content_type:
             body = ''.join([chunk for chunk in body_iter])
             try:
                 body = json.loads(body)
@@ -220,8 +225,7 @@ class VerifiedHTTPSConnection(httplib.HTTPSConnection):
         self.insecure = insecure
 
     def connect(self):
-        """
-        Connect to a host on a given (SSL) port.
+        """Connect to a host on a given (SSL) port.
         If ca_file is pointing somewhere, use it to check Server Certificate.
 
         Redefined/copied and extended from httplib.py:1105 (Python 2.6.x).
@@ -249,7 +253,7 @@ class VerifiedHTTPSConnection(httplib.HTTPSConnection):
 
     @staticmethod
     def get_system_ca_file():
-        """"Return path to system default CA file"""
+        """Return path to system default CA file."""
         # Standard CA file locations for Debian/Ubuntu, RedHat/Fedora,
         # Suse, FreeBSD/OpenBSD
         ca_path = ['/etc/ssl/certs/ca-certificates.crt',

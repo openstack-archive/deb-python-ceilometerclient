@@ -14,6 +14,7 @@
 #    under the License.
 
 from ceilometerclient.common import http
+from ceilometerclient.v2 import alarms
 from ceilometerclient.v2 import meters
 from ceilometerclient.v2 import resources
 from ceilometerclient.v2 import samples
@@ -31,9 +32,10 @@ class Client(http.HTTPClient):
     """
 
     def __init__(self, *args, **kwargs):
-        """ Initialize a new client for the Ceilometer v1 API. """
+        """Initialize a new client for the Ceilometer v1 API."""
         super(Client, self).__init__(*args, **kwargs)
         self.meters = meters.MeterManager(self)
         self.samples = samples.SampleManager(self)
         self.statistics = statistics.StatisticsManager(self)
         self.resources = resources.ResourceManager(self)
+        self.alarms = alarms.AlarmManager(self)

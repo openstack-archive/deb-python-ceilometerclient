@@ -14,9 +14,21 @@
 #    under the License.
 
 import copy
+import fixtures
+import mox
 import StringIO
+import testtools
 
 from ceilometerclient.common import http
+
+
+class BaseTestCase(testtools.TestCase):
+
+    def setUp(self):
+        super(BaseTestCase, self).setUp()
+        self.m = mox.Mox()
+        self.addCleanup(self.m.UnsetStubs)
+        self.useFixture(fixtures.FakeLogger())
 
 
 class FakeAPI(object):
@@ -41,8 +53,7 @@ class FakeAPI(object):
 
 class FakeResponse(object):
     def __init__(self, headers, body=None, version=None):
-        """
-        :param headers: dict representing HTTP response headers
+        """:param headers: dict representing HTTP response headers
         :param body: file-like object
         """
         self.headers = headers
@@ -56,4 +67,3 @@ class FakeResponse(object):
 
     def read(self, amt):
         return self.body.read(amt)
-
