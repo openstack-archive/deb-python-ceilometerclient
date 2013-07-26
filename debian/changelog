@@ -1,5 +1,6 @@
-python-ceilometerclient (1.0.0-3) UNRELEASED; urgency=low
+python-ceilometerclient (1.0.1-1) UNRELEASED; urgency=low
 
+  * New upstream release.
   * Ran wrap-and-sort.
 
  -- Thomas Goirand <zigo@debian.org>  Thu, 30 May 2013 13:40:55 +0800
