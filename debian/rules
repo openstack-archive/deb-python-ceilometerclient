@@ -14,7 +14,8 @@ export OSLO_PACKAGE_VERSION=$(VERSION)
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 #	set -e ; for pyversion in $(shell pyversions -r); do $$pyversion setup.py test; done
-	echo "No test for now"
+	set -e ; for pyversion in $(shell pyversions -r); do $$pyversion setup.py testr; done
+#	echo "No test for now"
 endif
 
 override_dh_clean:
