@@ -1,3 +1,9 @@
+python-ceilometerclient (1.0.2-2) unstable; urgency=low
+
+  * Added missing build-depends: testrepository.
+
+ -- Thomas Goirand <zigo@debian.org>  Sun, 28 Jul 2013 07:35:18 +0000
+
 python-ceilometerclient (1.0.2-1) unstable; urgency=low
 
   * New upstream release.
