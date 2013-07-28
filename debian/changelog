@@ -1,4 +1,4 @@
-python-ceilometerclient (1.0.2-1) UNRELEASED; urgency=low
+python-ceilometerclient (1.0.2-1) unstable; urgency=low
 
   * New upstream release.
   * Ran wrap-and-sort.
