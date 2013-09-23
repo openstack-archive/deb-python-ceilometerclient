@@ -148,7 +148,7 @@ def _display_alarm(alarm):
               'evaluation_periods', 'threshold', 'comparison_operator',
               'state', 'enabled', 'alarm_id', 'user_id', 'project_id',
               'alarm_actions', 'ok_actions', 'insufficient_data_actions',
-              'matching_metadata']
+              'repeat_actions', 'matching_metadata']
     data = dict([(f, getattr(alarm, f, '')) for f in fields])
     utils.print_dict(data, wrap=72)
 
@@ -205,10 +205,14 @@ def do_alarm_show(cc, args={}):
            metavar='<Webhook URL>', action='append', default=None,
            help=('URL to invoke when state transitions to unkown. '
                  'May be used multiple times.'))
+@utils.arg('--repeat-actions', dest='repeat_actions', metavar='{True|False}',
+           type=utils.string_to_bool, default=False,
+           help=('True if actions should be repeatedly notified '
+                 'while alarm remains in target state'))
 @utils.arg('--matching-metadata', dest='matching_metadata',
            metavar='<Matching Metadata>', action='append', default=None,
-           help=('A meter should match this resource metadata (key=value)'
-                 'additionnal to the counter_name'))
+           help=('A meter should match this resource metadata (key=value) '
+                 'additionally to the counter_name'))
 def do_alarm_create(cc, args={}):
     '''Create a new alarm.'''
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
@@ -249,10 +253,14 @@ def do_alarm_create(cc, args={}):
            metavar='<Webhook URL>', action='append', default=None,
            help=('URL to invoke when state transitions to unkown. '
                  'May be used multiple times.'))
+@utils.arg('--repeat-actions', dest='repeat_actions',
+           metavar='{True|False}', type=utils.string_to_bool,
+           help=('True if actions should be repeatedly notified '
+                 'while alarm remains in target state'))
 @utils.arg('--matching-metadata', dest='matching_metadata',
            metavar='<Matching Metadata>', action='append', default=None,
-           help=('A meter should match this resource metadata (key=value)'
-                 'additionnal to the counter_name'))
+           help=('A meter should match this resource metadata (key=value) '
+                 'additionally to the counter_name'))
 def do_alarm_update(cc, args={}):
     '''Update an existing alarm.'''
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))

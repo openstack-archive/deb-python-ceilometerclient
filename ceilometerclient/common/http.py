@@ -133,8 +133,9 @@ class HTTPClient(object):
         # Copy the kwargs so we can reuse the original in case of redirects
         kwargs['headers'] = copy.deepcopy(kwargs.get('headers', {}))
         kwargs['headers'].setdefault('User-Agent', USER_AGENT)
-        if self.auth_token:
-            kwargs['headers'].setdefault('X-Auth-Token', self.auth_token)
+        auth_token = self.auth_token()
+        if auth_token:
+            kwargs['headers'].setdefault('X-Auth-Token', auth_token)
 
         self.log_curl_request(method, url, kwargs)
         conn = self.get_connection()
@@ -144,11 +145,13 @@ class HTTPClient(object):
             conn.request(method, conn_url, **kwargs)
             resp = conn.getresponse()
         except socket.gaierror as e:
-            message = "Error finding address for %(url)s: %(e)s" % locals()
+            message = ("Error finding address for %(url)s: %(e)s"
+                       % dict(url=url, e=e))
             raise exc.InvalidEndpoint(message=message)
         except (socket.error, socket.timeout) as e:
             endpoint = self.endpoint
-            message = "Error communicating with %(endpoint)s %(e)s" % locals()
+            message = ("Error communicating with %(endpoint)s %(e)s"
+                       % dict(endpoint=endpoint, e=e))
             raise exc.CommunicationError(message=message)
 
         body_iter = ResponseBodyIterator(resp)
