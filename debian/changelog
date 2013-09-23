@@ -1,3 +1,10 @@
+python-ceilometerclient (1.0.3-1) unstable; urgency=low
+
+  * New upstream release.
+  * Added missing build-depends: python-d2to1 (Closes: #724131).
+
+ -- Thomas Goirand <zigo@debian.org>  Mon, 23 Sep 2013 10:08:10 +0800
+
 python-ceilometerclient (1.0.2-2) unstable; urgency=low
 
   * Added missing build-depends: testrepository.
