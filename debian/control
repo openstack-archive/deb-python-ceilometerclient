@@ -23,6 +23,7 @@ Build-Depends-Indep: pep8,
                      python-setuptools (>= 0.6.24),
                      python-setuptools-git,
                      python-sphinx,
+                     python-subunit,
                      python-unittest2,
                      python-warlock,
                      testrepository
