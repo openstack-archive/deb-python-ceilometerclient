@@ -1,5 +1,6 @@
-python-ceilometerclient (1.0.3-2) UNRELEASED; urgency=low
+python-ceilometerclient (1.0.5-1) unstable; urgency=low
 
+  * New upstream release.
   * Added --slowest --testr-args='--subunit  ' when calling testr.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 01 Oct 2013 15:21:55 +0800
