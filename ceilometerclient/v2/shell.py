@@ -28,11 +28,14 @@ ALARM_STATES = ['ok', 'alarm', 'insufficient_data']
 ALARM_OPERATORS = ['lt', 'le', 'eq', 'ne', 'ge', 'gt']
 ALARM_COMBINATION_OPERATORS = ['and', 'or']
 STATISTICS = ['max', 'min', 'avg', 'sum', 'count']
+OPERATORS_STRING = dict(gt='>', ge='>=',
+                        lt='<', le="<=",
+                        eq='==', ne='!=')
 
 
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]value; list.')
-@utils.arg('-m', '--meter', metavar='<NAME>',
+@utils.arg('-m', '--meter', metavar='<NAME>', required=True,
            help='Name of meter to show samples for.')
 @utils.arg('-p', '--period', metavar='<PERIOD>',
            help='Period in seconds over which to group samples.')
@@ -41,8 +44,6 @@ def do_statistics(cc, args):
     fields = {'meter_name': args.meter,
               'q': options.cli_to_array(args.query),
               'period': args.period}
-    if args.meter is None:
-        raise exc.CommandError('Meter name not provided (-m <meter name>)')
     try:
         statistics = cc.statistics.list(**fields)
     except exc.HTTPNotFound:
@@ -59,14 +60,12 @@ def do_statistics(cc, args):
 
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]value; list.')
-@utils.arg('-m', '--meter', metavar='<NAME>',
+@utils.arg('-m', '--meter', metavar='<NAME>', required=True,
            help='Name of meter to show samples for.')
 def do_sample_list(cc, args):
     '''List the samples for this meters.'''
     fields = {'meter_name': args.meter,
               'q': options.cli_to_array(args.query)}
-    if args.meter is None:
-        raise exc.CommandError('Meter name not provided (-m <meter name>)')
     try:
         samples = cc.samples.list(**fields)
     except exc.HTTPNotFound:
@@ -86,15 +85,15 @@ def do_sample_list(cc, args):
 @utils.arg('--user-id', metavar='<USER_ID>',
            help='User to associate with sample '
                 '(only settable by admin users)')
-@utils.arg('-r', '--resource-id', metavar='<RESOURCE_ID>',
+@utils.arg('-r', '--resource-id', metavar='<RESOURCE_ID>', required=True,
            help='ID of the resource.')
 @utils.arg('-m', '--meter-name', metavar='<METER_NAME>',
            help='the meter name')
-@utils.arg('--meter-type', metavar='<METER_TYPE>',
+@utils.arg('--meter-type', metavar='<METER_TYPE>', required=True,
            help='the meter type')
-@utils.arg('--meter-unit', metavar='<METER_UNIT>',
+@utils.arg('--meter-unit', metavar='<METER_UNIT>', required=True,
            help='the meter unit')
-@utils.arg('--sample-volume', metavar='<SAMPLE_VOLUME>',
+@utils.arg('--sample-volume', metavar='<SAMPLE_VOLUME>', required=True,
            help='The sample volume')
 @utils.arg('--resource-metadata', metavar='<RESOURCE_METADATA>',
            help='resource metadata')
@@ -128,6 +127,65 @@ def do_meter_list(cc, args={}):
                      sortby=0)
 
 
+def _display_rule(type, rule):
+    if type == 'threshold':
+        return ('%(meter_name)s %(comparison_operator)s '
+                '%(threshold)s during %(evaluation_periods)s x %(period)ss' %
+                {
+                    'meter_name': rule['meter_name'],
+                    'threshold': rule['threshold'],
+                    'evaluation_periods': rule['evaluation_periods'],
+                    'period': rule['period'],
+                    'comparison_operator': OPERATORS_STRING.get(
+                        rule['comparison_operator'])
+                })
+    elif type == 'combination':
+        return ('combinated states (%(operator)s) of %(alarms)s' % {
+            'operator': rule['operator'].upper(),
+            'alarms': ", ".join(rule['alarm_ids'])})
+    else:
+        # just dump all
+        return "\n".join(["%s: %s" % (f, v)
+                          for f, v in rule.iteritems()])
+
+
+def alarm_rule_formatter(alarm):
+    return _display_rule(alarm.type, alarm.rule)
+
+
+def _infer_type(detail):
+    if 'type' in detail:
+        return detail['type']
+    elif 'meter_name' in detail['rule']:
+        return 'threshold'
+    elif 'alarms' in detail['rule']:
+        return 'combination'
+    else:
+        return 'unknown'
+
+
+def alarm_change_detail_formatter(change):
+    detail = json.loads(change.detail)
+    fields = []
+    if change.type == 'state transition':
+        fields.append('state: %s' % detail['state'])
+    elif change.type == 'creation' or change.type == 'deletion':
+        for k in ['name', 'description', 'type', 'rule']:
+            if k == 'rule':
+                fields.append('rule: %s' % _display_rule(detail['type'],
+                                                         detail[k]))
+            else:
+                fields.append('%s: %s' % (k, detail[k]))
+    elif change.type == 'rule change':
+        for k, v in detail.iteritems():
+            if k == 'rule':
+                fields.append('rule: %s' % _display_rule(_infer_type(detail),
+                                                         v))
+            else:
+                fields.append('%s: %s' % (k, v))
+    return '\n'.join(fields)
+
+
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]value; list.')
 def do_alarm_list(cc, args={}):
@@ -135,29 +193,38 @@ def do_alarm_list(cc, args={}):
     alarms = cc.alarms.list(q=options.cli_to_array(args.query))
     # omit action initially to keep output width sane
     # (can switch over to vertical formatting when available from CLIFF)
-    field_labels = ['Name', 'Description', 'State', 'Enabled', 'Continuous',
-                    'Alarm ID', 'User ID', 'Project ID']
-    fields = ['name', 'description', 'state', 'enabled', 'repeat_actions',
-              'alarm_id', 'user_id', 'project_id']
+    field_labels = ['Alarm ID', 'Name', 'State', 'Enabled', 'Continuous',
+                    'Alarm condition']
+    fields = ['alarm_id', 'name', 'state', 'enabled', 'repeat_actions',
+              'rule']
     utils.print_list(alarms, fields, field_labels,
-                     sortby=0)
+                     formatters={'rule': alarm_rule_formatter}, sortby=0)
+
+
+def alarm_query_formater(alarm):
+    qs = []
+    for q in alarm.rule['query']:
+        qs.append('%s %s %s' % (
+            q['field'], OPERATORS_STRING.get(q['op']), q['value']))
+    return r' AND\n'.join(qs)
 
 
 def _display_alarm(alarm):
-    fields = ['name', 'description', 'type', 'rule',
+    fields = ['name', 'description', 'type',
               'state', 'enabled', 'alarm_id', 'user_id', 'project_id',
               'alarm_actions', 'ok_actions', 'insufficient_data_actions',
               'repeat_actions']
     data = dict([(f, getattr(alarm, f, '')) for f in fields])
+    data.update(alarm.rule)
+    if alarm.type == 'threshold':
+        data['query'] = alarm_query_formater(alarm)
     utils.print_dict(data, wrap=72)
 
 
-@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
            help='ID of the alarm to show.')
 def do_alarm_show(cc, args={}):
     '''Show an alarm.'''
-    if args.alarm_id is None:
-        raise exc.CommandError('Alarm ID not provided (-a <alarm id>)')
     try:
         alarm = cc.alarms.get(args.alarm_id)
     except exc.HTTPNotFound:
@@ -166,45 +233,49 @@ def do_alarm_show(cc, args={}):
         _display_alarm(alarm)
 
 
-def common_alarm_arguments(func):
-    @utils.arg('--name', metavar='<NAME>', required=True,
-               help='Name of the alarm (must be unique per tenant)')
-    @utils.arg('--project-id', metavar='<PROJECT_ID>',
-               help='Tenant to associate with alarm '
-               '(only settable by admin users)')
-    @utils.arg('--user-id', metavar='<USER_ID>',
-               help='User to associate with alarm '
-               '(only settable by admin users)')
-    @utils.arg('--description', metavar='<DESCRIPTION>',
-               help='Free text description of the alarm')
-    @utils.arg('--state', metavar='<STATE>',
-               help='State of the alarm, one of: ' + str(ALARM_STATES))
-    @utils.arg('--enabled', type=utils.string_to_bool, metavar='{True|False}',
-               help='True if alarm evaluation/actioning is enabled')
-    @utils.arg('--alarm-action', dest='alarm_actions',
-               metavar='<Webhook URL>', action='append', default=None,
-               help=('URL to invoke when state transitions to alarm. '
-                     'May be used multiple times.'))
-    @utils.arg('--ok-action', dest='ok_actions',
-               metavar='<Webhook URL>', action='append', default=None,
-               help=('URL to invoke when state transitions to OK. '
-                     'May be used multiple times.'))
-    @utils.arg('--insufficient-data-action', dest='insufficient_data_actions',
-               metavar='<Webhook URL>', action='append', default=None,
-               help=('URL to invoke when state transitions to unkown. '
-                     'May be used multiple times.'))
-    @utils.arg('--repeat-actions', dest='repeat_actions',
-               metavar='{True|False}', type=utils.string_to_bool,
-               default=False,
-               help=('True if actions should be repeatedly notified '
-                     'while alarm remains in target state'))
-    @functools.wraps(func)
-    def _wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
+def common_alarm_arguments(create=False):
+    def _wrapper(func):
+        @utils.arg('--name', metavar='<NAME>', required=create,
+                   help='Name of the alarm (must be unique per tenant)')
+        @utils.arg('--project-id', metavar='<PROJECT_ID>',
+                   help='Tenant to associate with alarm '
+                   '(only settable by admin users)')
+        @utils.arg('--user-id', metavar='<USER_ID>',
+                   help='User to associate with alarm '
+                   '(only settable by admin users)')
+        @utils.arg('--description', metavar='<DESCRIPTION>',
+                   help='Free text description of the alarm')
+        @utils.arg('--state', metavar='<STATE>',
+                   help='State of the alarm, one of: ' + str(ALARM_STATES))
+        @utils.arg('--enabled', type=utils.string_to_bool,
+                   metavar='{True|False}',
+                   help='True if alarm evaluation/actioning is enabled')
+        @utils.arg('--alarm-action', dest='alarm_actions',
+                   metavar='<Webhook URL>', action='append', default=None,
+                   help=('URL to invoke when state transitions to alarm. '
+                         'May be used multiple times.'))
+        @utils.arg('--ok-action', dest='ok_actions',
+                   metavar='<Webhook URL>', action='append', default=None,
+                   help=('URL to invoke when state transitions to OK. '
+                         'May be used multiple times.'))
+        @utils.arg('--insufficient-data-action',
+                   dest='insufficient_data_actions',
+                   metavar='<Webhook URL>', action='append', default=None,
+                   help=('URL to invoke when state transitions to unkown. '
+                         'May be used multiple times.'))
+        @utils.arg('--repeat-actions', dest='repeat_actions',
+                   metavar='{True|False}', type=utils.string_to_bool,
+                   default=False,
+                   help=('True if actions should be repeatedly notified '
+                         'while alarm remains in target state'))
+        @functools.wraps(func)
+        def _wrapped(*args, **kwargs):
+            return func(*args, **kwargs)
+        return _wrapped
     return _wrapper
 
 
-@common_alarm_arguments
+@common_alarm_arguments(create=True)
 @utils.arg('--period', type=int, metavar='<PERIOD>',
            help='Length of each period (seconds) to evaluate over')
 @utils.arg('--evaluation-periods', type=int, metavar='<COUNT>',
@@ -229,7 +300,7 @@ def do_alarm_create(cc, args={}):
     _display_alarm(alarm)
 
 
-@common_alarm_arguments
+@common_alarm_arguments(create=True)
 @utils.arg('--meter-name', metavar='<METRIC>', required=True,
            dest='threshold_rule/meter_name',
            help='Metric to evaluate against')
@@ -264,7 +335,7 @@ def do_alarm_threshold_create(cc, args={}):
     _display_alarm(alarm)
 
 
-@common_alarm_arguments
+@common_alarm_arguments(create=True)
 @utils.arg('--alarm_ids', action='append', metavar='<ALARM IDS>',
            required=True, dest='combination_rule/alarm_ids',
            help='List of alarm id')
@@ -283,18 +354,18 @@ def do_alarm_combination_create(cc, args={}):
 
 @utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
            help='ID of the alarm to update.')
-@common_alarm_arguments
+@common_alarm_arguments()
 @utils.arg('--period', type=int, metavar='<PERIOD>',
            help='Length of each period (seconds) to evaluate over')
 @utils.arg('--evaluation-periods', type=int, metavar='<COUNT>',
            help='Number of periods to evaluate over')
-@utils.arg('--meter-name', metavar='<METRIC>', required=True,
+@utils.arg('--meter-name', metavar='<METRIC>',
            help='Metric to evaluate against')
 @utils.arg('--statistic', metavar='<STATISTIC>',
            help='Statistic to evaluate, one of: ' + str(STATISTICS))
 @utils.arg('--comparison-operator', metavar='<OPERATOR>',
            help='Operator to compare with, one of: ' + str(ALARM_OPERATORS))
-@utils.arg('--threshold', type=float, metavar='<THRESHOLD>', required=True,
+@utils.arg('--threshold', type=float, metavar='<THRESHOLD>',
            help='Threshold to evaluate against')
 @utils.arg('--matching-metadata', dest='matching_metadata',
            metavar='<Matching Metadata>', action='append', default=None,
@@ -314,9 +385,9 @@ def do_alarm_update(cc, args={}):
 
 @utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
            help='ID of the alarm to update.')
-@common_alarm_arguments
+@common_alarm_arguments()
 @utils.arg('--meter-name', metavar='<METRIC>',
-           dest='threshold_rule/meter_name', required=True,
+           dest='threshold_rule/meter_name',
            help='Metric to evaluate against')
 @utils.arg('--period', type=int, metavar='<PERIOD>',
            dest='threshold_rule/period',
@@ -330,7 +401,7 @@ def do_alarm_update(cc, args={}):
 @utils.arg('--comparison-operator', metavar='<OPERATOR>',
            dest='threshold_rule/comparison_operator',
            help='Operator to compare with, one of: ' + str(ALARM_OPERATORS))
-@utils.arg('--threshold', type=float, metavar='<THRESHOLD>', required=True,
+@utils.arg('--threshold', type=float, metavar='<THRESHOLD>',
            dest='threshold_rule/threshold',
            help='Threshold to evaluate against')
 @utils.arg('-q', '--query', metavar='<QUERY>',
@@ -355,9 +426,9 @@ def do_alarm_threshold_update(cc, args={}):
 
 @utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
            help='ID of the alarm to update.')
-@common_alarm_arguments
+@common_alarm_arguments()
 @utils.arg('--alarm_ids', action='append', metavar='<ALARM IDS>',
-           dest='combination_rule/alarm_ids', required=True,
+           dest='combination_rule/alarm_ids',
            help='List of alarm id')
 @utils.arg('---operator', metavar='<OPERATOR>',
            dest='combination_rule/operator',
@@ -380,8 +451,6 @@ def do_alarm_combination_update(cc, args={}):
            help='ID of the alarm to delete.')
 def do_alarm_delete(cc, args={}):
     '''Delete an alarm.'''
-    if args.alarm_id is None:
-        raise exc.CommandError('Alarm ID not provided (-a <alarm id>)')
     try:
         cc.alarms.delete(args.alarm_id)
     except exc.HTTPNotFound:
@@ -392,26 +461,43 @@ def do_alarm_delete(cc, args={}):
            help='ID of the alarm state to set.')
 @utils.arg('--state', metavar='<STATE>', required=True,
            help='State of the alarm, one of: ' + str(ALARM_STATES))
-def do_alarm_set_state(cc, args={}):
+def do_alarm_state_set(cc, args={}):
     '''Set the state of an alarm.'''
     try:
-        cc.alarms.set_state(args.alarm_id, args.state)
+        state = cc.alarms.set_state(args.alarm_id, args.state)
     except exc.HTTPNotFound:
         raise exc.CommandError('Alarm not found: %s' % args.alarm_id)
-    state = cc.alarms.get_state(args.alarm_id)
     utils.print_dict({'state': state}, wrap=72)
 
 
 @utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
            help='ID of the alarm state to show.')
-def do_alarm_get_state(cc, args={}):
+def do_alarm_state_get(cc, args={}):
     '''Get the state of an alarm.'''
     try:
-        cc.alarms.set_state(args.alarm_id, args.state)
+        state = cc.alarms.get_state(args.alarm_id)
     except exc.HTTPNotFound:
         raise exc.CommandError('Alarm not found: %s' % args.alarm_id)
-    state = cc.alarms.get_state(args.alarm_id)
     utils.print_dict({'state': state}, wrap=72)
+
+
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
+           help='ID of the alarm for which history is shown.')
+@utils.arg('-q', '--query', metavar='<QUERY>',
+           help='key[op]value; list.')
+def do_alarm_history(cc, args={}):
+    '''Display the change history of an alarm.'''
+    kwargs = dict(alarm_id=args.alarm_id,
+                  q=options.cli_to_array(args.query))
+    try:
+        history = cc.alarms.get_history(**kwargs)
+    except exc.HTTPNotFound:
+        raise exc.CommandError('Alarm not found: %s' % args.alarm_id)
+    field_labels = ['Type', 'Timestamp', 'Detail']
+    fields = ['type', 'timestamp', 'detail']
+    utils.print_list(history, fields, field_labels,
+                     formatters={'detail': alarm_change_detail_formatter},
+                     sortby=1)
 
 
 @utils.arg('-q', '--query', metavar='<QUERY>',
@@ -426,12 +512,10 @@ def do_resource_list(cc, args={}):
                      sortby=1)
 
 
-@utils.arg('-r', '--resource_id', metavar='<RESOURCE_ID>',
+@utils.arg('-r', '--resource_id', metavar='<RESOURCE_ID>', required=True,
            help='ID of the resource to show.')
 def do_resource_show(cc, args={}):
     '''Show the resource.'''
-    if args.resource_id is None:
-        raise exc.CommandError('Resource id not provided (-r <resource id>)')
     try:
         resource = cc.resources.get(args.resource_id)
     except exc.HTTPNotFound:

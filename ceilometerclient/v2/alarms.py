@@ -19,6 +19,7 @@
 import warnings
 
 from ceilometerclient.common import base
+from ceilometerclient.common import utils
 from ceilometerclient.v2 import options
 
 
@@ -34,7 +35,7 @@ UPDATABLE_ATTRIBUTES = [
     'repeat_actions',
     'threshold_rule',
     'combination_rule',
-    ]
+]
 CREATION_ATTRIBUTES = UPDATABLE_ATTRIBUTES + ['project_id', 'user_id']
 
 
@@ -48,6 +49,14 @@ class Alarm(base.Resource):
         if k == 'rule':
             k = '%s_rule' % self.type
         return super(Alarm, self).__getattr__(k)
+
+
+class AlarmChange(base.Resource):
+    def __repr__(self):
+        return "<AlarmChange %s>" % self._info
+
+    def __getattr__(self, k):
+        return super(AlarmChange, self).__getattr__(k)
 
 
 class AlarmManager(base.Manager):
@@ -67,12 +76,12 @@ class AlarmManager(base.Manager):
             return None
 
     @classmethod
-    def _compat_legacy_alarm_kwargs(cls, kwargs):
-        cls._compat_counter_rename_kwargs(kwargs)
-        cls._compat_alarm_before_rule_type_kwargs(kwargs)
+    def _compat_legacy_alarm_kwargs(cls, kwargs, create=False):
+        cls._compat_counter_rename_kwargs(kwargs, create)
+        cls._compat_alarm_before_rule_type_kwargs(kwargs, create)
 
     @staticmethod
-    def _compat_counter_rename_kwargs(kwargs):
+    def _compat_counter_rename_kwargs(kwargs, create=False):
         # NOTE(jd) Compatibility with Havana-2 API
         if 'counter_name' in kwargs:
             warnings.warn("counter_name has been renamed to meter_name",
@@ -80,40 +89,40 @@ class AlarmManager(base.Manager):
             kwargs['meter_name'] = kwargs['counter_name']
 
     @staticmethod
-    def _compat_alarm_before_rule_type_kwargs(kwargs):
+    def _compat_alarm_before_rule_type_kwargs(kwargs, create=False):
         # NOTE(sileht) Compatibility with Havana-3 API
-        if kwargs.get('type'):
-            return
-        warnings.warn("alarm without type set is deprecated",
-                      DeprecationWarning)
+        if create and 'type' not in kwargs:
+            warnings.warn("alarm without type set is deprecated",
+                          DeprecationWarning)
+            kwargs['type'] = 'threshold'
 
-        kwargs['type'] = 'threshold'
-        kwargs['threshold_rule'] = {}
         for field in ['period', 'evaluation_periods', 'threshold',
                       'statistic', 'comparison_operator', 'meter_name']:
             if field in kwargs:
-                kwargs['threshold_rule'][field] = kwargs[field]
+                kwargs.setdefault('threshold_rule', {})[field] = kwargs[field]
                 del kwargs[field]
 
-        query = []
         if 'matching_metadata' in kwargs:
+            query = []
             for key in kwargs['matching_metadata']:
                 query.append({'field': key,
                               'op': 'eq',
                               'value': kwargs['matching_metadata'][key]})
             del kwargs['matching_metadata']
-        kwargs['threshold_rule']['query'] = query
+            kwargs['threshold_rule']['query'] = query
 
     def create(self, **kwargs):
-        self._compat_legacy_alarm_kwargs(kwargs)
+        self._compat_legacy_alarm_kwargs(kwargs, create=True)
         new = dict((key, value) for (key, value) in kwargs.items()
                    if key in CREATION_ATTRIBUTES)
         return self._create(self._path(), new)
 
     def update(self, alarm_id, **kwargs):
         self._compat_legacy_alarm_kwargs(kwargs)
-        updated = dict((key, value) for (key, value) in kwargs.items()
-                       if key in UPDATABLE_ATTRIBUTES)
+        updated = self.get(alarm_id).to_dict()
+        kwargs = dict((k, v) for k, v in kwargs.items()
+                      if k in updated and k in UPDATABLE_ATTRIBUTES)
+        utils.merge_nested_dict(updated, kwargs, depth=1)
         return self._update(self._path(alarm_id), updated)
 
     def delete(self, alarm_id):
@@ -129,3 +138,8 @@ class AlarmManager(base.Manager):
         resp, body = self.api.json_request('GET',
                                            "%s/state" % self._path(alarm_id))
         return body
+
+    def get_history(self, alarm_id, q=None):
+        path = '%s/history' % self._path(alarm_id)
+        url = options.build_url(path, q)
+        return self._list(url, obj_class=AlarmChange)
