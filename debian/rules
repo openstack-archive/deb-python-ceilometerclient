@@ -29,4 +29,7 @@ override_dh_clean:
 override_dh_installman:
 ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
 	sphinx-build -b man doc/source doc/man
+	mv doc/man/python-ceilometerclient.1 doc/man/ceilometer.1
+	sed -i s/python-ceilometerclient/python-ceilometerclient/ doc/man/ceilometer.1
+	dh_installman -O--buildsystem=python_distutils
 endif
