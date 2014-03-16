@@ -27,7 +27,7 @@ Build-Depends-Indep: pep8,
                      python-warlock,
                      testrepository (>= 0.0.17),
                      subunit
-Standards-Version: 3.9.4
+Standards-Version: 3.9.5
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-ceilometerclient.git;a=summary
 Vcs-Git: git://anonscm.debian.org/openstack/python-ceilometerclient.git
 Homepage: http://www.openstack.org
