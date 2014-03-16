@@ -1,3 +1,9 @@
+python-ceilometerclient (1.0.6-2) unstable; urgency=medium
+
+  * Fixed subunit output.
+
+ -- Thomas Goirand <zigo@debian.org>  Sun, 16 Mar 2014 14:29:03 +0800
+
 python-ceilometerclient (1.0.6-1) unstable; urgency=low
 
   * New upstream release.
