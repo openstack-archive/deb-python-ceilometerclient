@@ -9,24 +9,22 @@ Uploaders: Julien Danjou <acid@debian.org>,
 Build-Depends: debhelper (>= 9),
                openstack-pkg-tools,
                python-all (>= 2.6.6-3~),
-               python-d2to1
-Build-Depends-Indep: pep8,
-                     python-argparse,
+               python-pbr (>= 0.5.21),
+               python-setuptools
+Build-Depends-Indep: python-coverage (>= 3.6),
+                     python-fixtures (>= 0.3.14),
+                     python-hacking,
                      python-httplib2,
                      python-iso8601,
-                     python-keystoneclient (>= 1:0.1.2),
+                     python-keystoneclient (>= 1:0.3.2),
+                     python-mock (>= 1.0),
                      python-mox,
-                     python-nose,
-                     python-nosexcover,
                      python-prettytable (>= 0.6),
-                     python-setuptools (>= 0.6.24),
-                     python-setuptools-git,
                      python-sphinx,
-                     python-subunit,
-                     python-unittest2,
-                     python-warlock,
+                     python-subunit (>= 0.0.18),
+                     python-testtools (>= 0.9.32),
                      testrepository (>= 0.0.17),
-                     subunit
+                     subunit (>= 0.0.18)
 Standards-Version: 3.9.5
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-ceilometerclient.git;a=summary
 Vcs-Git: git://anonscm.debian.org/openstack/python-ceilometerclient.git
@@ -35,15 +33,11 @@ Homepage: http://www.openstack.org
 Package: python-ceilometerclient
 Architecture: all
 Pre-Depends: dpkg (>= 1.15.6~)
-Depends: python-argparse,
-         python-httplib2,
+Depends: python-httplib2,
          python-iso8601,
-         python-keystoneclient (>= 1:0.1.2),
+         python-keystoneclient (>= 1:0.3.2),
+         python-pbr (>= 0.5.21),
          python-prettytable (>= 0.6),
-         python-setuptools,
-         python-setuptools-git,
-         python-sphinx,
-         python-warlock,
          ${misc:Depends},
          ${python:Depends}
 Description: Client library for Openstack Ceilometer API server
