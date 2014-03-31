@@ -13,13 +13,12 @@ Build-Depends: debhelper (>= 9),
                python-setuptools
 Build-Depends-Indep: python-coverage (>= 3.6),
                      python-fixtures (>= 0.3.14),
-                     python-hacking,
-                     python-httplib2,
-                     python-iso8601,
-                     python-keystoneclient (>= 1:0.3.2),
+                     python-hacking (>= 0.8.0),
+                     python-iso8601 (>= 0.1.8),
+                     python-keystoneclient (>= 1:0.4.1),
                      python-mock (>= 1.0),
-                     python-mox,
-                     python-prettytable (>= 0.6),
+                     python-prettytable (>= 0.7),
+                     python-six (>= 1.4.1),
                      python-sphinx,
                      python-subunit (>= 0.0.18),
                      python-testtools (>= 0.9.32),
@@ -33,11 +32,11 @@ Homepage: http://www.openstack.org
 Package: python-ceilometerclient
 Architecture: all
 Pre-Depends: dpkg (>= 1.15.6~)
-Depends: python-httplib2,
-         python-iso8601,
-         python-keystoneclient (>= 1:0.3.2),
+Depends: python-iso8601 (>= 0.1.8),
+         python-keystoneclient (>= 1:0.4.1),
          python-pbr (>= 0.5.21),
-         python-prettytable (>= 0.6),
+         python-prettytable (>= 0.7),
+         python-six (>= 1.4.1),
          ${misc:Depends},
          ${python:Depends}
 Description: Client library for Openstack Ceilometer API server

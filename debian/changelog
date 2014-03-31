@@ -1,5 +1,6 @@
-python-ceilometerclient (1.0.6-3) unstable; urgency=medium
+python-ceilometerclient (1.0.9-1) unstable; urgency=medium
 
+  * New upstream release.
   * Reviewed (build-)dependencies and added missing "subunit" build-depends
     (Closes: #743093).
   * Disable man page build because it's failing in Wheezy backport.
