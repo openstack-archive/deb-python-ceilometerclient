@@ -1,6 +1,7 @@
 #!/usr/bin/make -f
 
-#export DH_VERBOSE=1
+PYTHONS:=$(shell pyversions -vr)
+PYTHON3S:=$(shell py3versions -vr)
 
 MANIFEST_EXCLUDE_STANDARD := ceilometerclient
 

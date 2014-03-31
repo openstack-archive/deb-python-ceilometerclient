@@ -1,6 +1,7 @@
 python-ceilometerclient (1.0.6-3) unstable; urgency=medium
 
-  * Reviewed (build-)dependencies.
+  * Reviewed (build-)dependencies and added missing "subunit" build-depends
+    (Closes: #743093).
   * Disable man page build because it's failing in Wheezy backport.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 25 Mar 2014 15:16:04 +0800
