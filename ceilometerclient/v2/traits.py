@@ -1,3 +1,5 @@
+# -*- encoding: utf-8 -*-
+# Copyright 2013 Hewlett-Packard Development Company, L.P.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,20 +14,16 @@
 #    under the License.
 
 from ceilometerclient.common import base
-from ceilometerclient.v2 import options
 
 
-class Statistics(base.Resource):
+class Trait(base.Resource):
     def __repr__(self):
-        return "<Statistics %s>" % self._info
+        return "<Trait %s>" % self._info
 
 
-class StatisticsManager(base.Manager):
-    resource_class = Statistics
+class TraitManager(base.Manager):
+    resource_class = Trait
 
-    def list(self, meter_name, q=None, period=None, groupby=[]):
-        p = ['period=%s' % period] if period else []
-        p.extend(['groupby=%s' % g for g in groupby] if groupby else [])
-        return self._list(options.build_url(
-            '/v2/meters/' + meter_name + '/statistics',
-            q, p))
+    def list(self, event_type, trait_name):
+        path = '/v2/event_types/%s/traits/%s' % (event_type, trait_name)
+        return self._list(path)

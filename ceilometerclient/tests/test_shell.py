@@ -10,12 +10,12 @@
 #   License for the specific language governing permissions and limitations
 #   under the License.
 
-import cStringIO
-import httplib2
 import re
+import six
 import sys
 
 import fixtures
+import mock
 from testtools import matchers
 
 from keystoneclient.v2_0 import client as ksclient
@@ -41,14 +41,14 @@ class ShellTest(utils.BaseTestCase):
 
     def setUp(self):
         super(ShellTest, self).setUp()
-        self.m.StubOutWithMock(ksclient, 'Client')
-        self.m.StubOutWithMock(v1client.Client, 'json_request')
-        self.m.StubOutWithMock(v1client.Client, 'raw_request')
 
-    def shell(self, argstr):
+    @mock.patch.object(ksclient, 'Client')
+    @mock.patch.object(v1client.http.HTTPClient, 'json_request')
+    @mock.patch.object(v1client.http.HTTPClient, 'raw_request')
+    def shell(self, argstr, mock_ksclient, mock_json, mock_raw):
         orig = sys.stdout
         try:
-            sys.stdout = cStringIO.StringIO()
+            sys.stdout = six.StringIO()
             _shell = ceilometer_shell.CeilometerShell()
             _shell.main(argstr.split())
         except SystemExit:
@@ -63,11 +63,6 @@ class ShellTest(utils.BaseTestCase):
 
     def test_help_unknown_command(self):
         self.assertRaises(exc.CommandError, self.shell, 'help foofoo')
-
-    def test_debug(self):
-        httplib2.debuglevel = 0
-        self.shell('--debug help')
-        self.assertEqual(httplib2.debuglevel, 1)
 
     def test_help(self):
         required = [
@@ -99,3 +94,24 @@ class ShellTest(utils.BaseTestCase):
     def test_auth_param(self):
         self.make_env(exclude='OS_USERNAME')
         self.test_help()
+
+    @mock.patch.object(ksclient, 'Client')
+    def test_debug_switch_raises_error(self, mock_ksclient):
+        mock_ksclient.side_effect = exc.Unauthorized
+        self.make_env()
+        args = ['--debug', 'event-list']
+        self.assertRaises(exc.Unauthorized, ceilometer_shell.main, args)
+
+    @mock.patch.object(ksclient, 'Client')
+    def test_dash_d_switch_raises_error(self, mock_ksclient):
+        mock_ksclient.side_effect = exc.CommandError("FAIL")
+        self.make_env()
+        args = ['-d', 'event-list']
+        self.assertRaises(exc.CommandError, ceilometer_shell.main, args)
+
+    @mock.patch.object(ksclient, 'Client')
+    def test_no_debug_switch_no_raises_errors(self, mock_ksclient):
+        mock_ksclient.side_effect = exc.Unauthorized("FAIL")
+        self.make_env()
+        args = ['event-list']
+        self.assertRaises(SystemExit, ceilometer_shell.main, args)

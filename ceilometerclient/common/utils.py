@@ -13,7 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import os
+from __future__ import print_function
+import six
 import sys
 import textwrap
 import uuid
@@ -21,7 +22,9 @@ import uuid
 import prettytable
 
 from ceilometerclient import exc
+from ceilometerclient.openstack.common import cliutils
 from ceilometerclient.openstack.common import importutils
+from ceilometerclient.openstack.common import strutils
 
 
 # Decorator for cli-args
@@ -46,33 +49,52 @@ def pretty_choice_list(l):
 
 
 def print_list(objs, fields, field_labels, formatters={}, sortby=0):
-    pt = prettytable.PrettyTable([f for f in field_labels],
-                                 caching=False, print_empty=False)
-    pt.align = 'l'
 
-    for o in objs:
-        row = []
-        for field in fields:
-            if field in formatters:
-                row.append(formatters[field](o))
-            else:
-                data = getattr(o, field, '')
-                row.append(data)
-        pt.add_row(row)
-    print pt.get_string(sortby=field_labels[sortby])
+    def _make_default_formatter(field):
+        return lambda o: getattr(o, field, '')
+
+    new_formatters = {}
+    for field, field_label in six.moves.zip(fields, field_labels):
+        if field in formatters:
+            new_formatters[field_label] = formatters[field]
+        else:
+            new_formatters[field_label] = _make_default_formatter(field)
+
+    cliutils.print_list(objs, field_labels,
+                        formatters=new_formatters,
+                        sortby_index=sortby)
+
+
+def nested_list_of_dict_formatter(field, column_names):
+    # (TMaddox) Because the formatting scheme actually drops the whole object
+    # into the formatter, rather than just the specified field, we have to
+    # extract it and then pass the value.
+    return lambda o: format_nested_list_of_dict(getattr(o, field),
+                                                column_names)
+
+
+def format_nested_list_of_dict(l, column_names):
+    pt = prettytable.PrettyTable(caching=False, print_empty=False,
+                                 header=True, hrules=prettytable.FRAME,
+                                 field_names=column_names)
+    for d in l:
+        pt.add_row(map(lambda k: d[k], column_names))
+    return pt.get_string()
 
 
 def print_dict(d, dict_property="Property", wrap=0):
     pt = prettytable.PrettyTable([dict_property, 'Value'],
                                  caching=False, print_empty=False)
     pt.align = 'l'
-    for k, v in d.iteritems():
+    for k, v in sorted(six.iteritems(d)):
         # convert dict to str to check length
         if isinstance(v, dict):
             v = str(v)
+        if isinstance(v, six.string_types):
+            v = strutils.safe_encode(v)
         # if value has a newline, add in multiple rows
         # e.g. fault with stacktrace
-        if v and isinstance(v, basestring) and r'\n' in v:
+        if v and isinstance(v, six.string_types) and r'\n' in v:
             lines = v.strip().split(r'\n')
             col1 = k
             for line in lines:
@@ -84,7 +106,7 @@ def print_dict(d, dict_property="Property", wrap=0):
             if wrap > 0:
                 v = textwrap.fill(str(v), wrap)
             pt.add_row([k, v])
-    print pt.get_string()
+    print(pt.get_string())
 
 
 def find_resource(manager, name_or_id):
@@ -112,23 +134,6 @@ def find_resource(manager, name_or_id):
         raise exc.CommandError(msg)
 
 
-def string_to_bool(arg):
-    return arg.strip().lower() in ('t', 'true', 'yes', '1')
-
-
-def env(*vars, **kwargs):
-    """Search for the first defined of possibly many env vars
-
-    Returns the first environment variable defined in vars, or
-    returns the default defined in kwargs.
-    """
-    for v in vars:
-        value = os.environ.get(v, None)
-        if value:
-            return value
-    return kwargs.get('default', '')
-
-
 def import_versioned_module(version, submodule=None):
     module = 'ceilometerclient.v%s' % version
     if submodule:
@@ -151,7 +156,7 @@ def args_array_to_dict(kwargs, key_to_convert):
 
 def key_with_slash_to_nested_dict(kwargs):
     nested_kwargs = {}
-    for k in kwargs.keys():
+    for k in list(kwargs):
         keys = k.split('/', 1)
         if len(keys) == 2:
             nested_kwargs.setdefault(keys[0], {})[keys[1]] = kwargs[k]
@@ -161,7 +166,7 @@ def key_with_slash_to_nested_dict(kwargs):
 
 
 def merge_nested_dict(dest, source, depth=0):
-    for (key, value) in source.iteritems():
+    for (key, value) in six.iteritems(source):
         if isinstance(value, dict) and depth:
             merge_nested_dict(dest[key], value,
                               depth=(depth - 1))
@@ -171,5 +176,5 @@ def merge_nested_dict(dest, source, depth=0):
 
 def exit(msg=''):
     if msg:
-        print >> sys.stderr, msg
+        print(msg, file=sys.stderr)
     sys.exit(1)

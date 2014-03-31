@@ -17,6 +17,9 @@
 #    under the License.
 
 import copy
+
+import six
+from six.moves import xrange  # noqa
 import testtools
 
 from ceilometerclient.tests import utils
@@ -185,8 +188,8 @@ fixtures = {
         ),
 
     },
-    '/v2/alarms?q.op=&q.op=&q.value=project-id&q.value=SwiftObjectAlarm'
-    '&q.field=project_id&q.field=name':
+    '/v2/alarms?q.field=project_id&q.field=name&q.op=&q.op='
+    '&q.type=&q.type=&q.value=project-id&q.value=SwiftObjectAlarm':
     {
         'GET': (
             {},
@@ -207,7 +210,7 @@ fixtures = {
             ALARM_HISTORY,
         ),
     },
-    '/v2/alarms/alarm-id/history?q.op=&q.value=NOW&q.field=timestamp':
+    '/v2/alarms/alarm-id/history?q.field=timestamp&q.op=&q.type=&q.value=NOW':
     {
         'GET': (
             {},
@@ -234,16 +237,14 @@ class AlarmManagerTest(testtools.TestCase):
         self.assertEqual(alarms[0].alarm_id, 'alarm-id')
 
     def test_list_with_query(self):
-        alarms = list(self.mgr.list(q=[
-                                      {"field": "project_id",
-                                       "value": "project-id"},
-                                      {"field": "name",
-                                       "value": "SwiftObjectAlarm"},
-                                     ]))
+        alarms = list(self.mgr.list(q=[{"field": "project_id",
+                                        "value": "project-id"},
+                                       {"field": "name",
+                                        "value": "SwiftObjectAlarm"}]))
         expect = [
             ('GET',
-             '/v2/alarms?q.op=&q.op=&q.value=project-id&q.value='
-             'SwiftObjectAlarm&q.field=project_id&q.field=name',
+             '/v2/alarms?q.field=project_id&q.field=name&q.op=&q.op='
+             '&q.type=&q.type=&q.value=project-id&q.value=SwiftObjectAlarm',
              {}, None),
         ]
         self.assertEqual(self.api.calls, expect)
@@ -277,7 +278,7 @@ class AlarmManagerTest(testtools.TestCase):
         self.assertEqual(self.api.calls, expect)
         self.assertTrue(alarm)
         self.assertEqual(alarm.alarm_id, 'alarm-id')
-        for (key, value) in UPDATED_ALARM.iteritems():
+        for (key, value) in six.iteritems(UPDATED_ALARM):
             self.assertEqual(getattr(alarm, key), value)
 
     def test_update_delta(self):
@@ -289,7 +290,7 @@ class AlarmManagerTest(testtools.TestCase):
         self.assertEqual(self.api.calls, expect)
         self.assertTrue(alarm)
         self.assertEqual(alarm.alarm_id, 'alarm-id')
-        for (key, value) in UPDATED_ALARM.iteritems():
+        for (key, value) in six.iteritems(UPDATED_ALARM):
             self.assertEqual(getattr(alarm, key), value)
 
     def test_set_state(self):
@@ -322,8 +323,8 @@ class AlarmManagerTest(testtools.TestCase):
         self.assertEqual(self.api.calls, expect)
         for i in xrange(len(history)):
             change = history[i]
-            self.assertTrue(isinstance(change, alarms.AlarmChange))
-            for k, v in ALARM_HISTORY[i].iteritems():
+            self.assertIsInstance(change, alarms.AlarmChange)
+            for k, v in six.iteritems(ALARM_HISTORY[i]):
                 self.assertEqual(getattr(change, k), v)
 
     def test_get_all_history(self):
@@ -332,8 +333,8 @@ class AlarmManagerTest(testtools.TestCase):
 
     def test_get_constrained_history(self):
         q = [dict(field='timestamp', value='NOW')]
-        url = ('/v2/alarms/alarm-id/history'
-               '?q.op=&q.value=NOW&q.field=timestamp')
+        url = ('/v2/alarms/alarm-id/history?q.field=timestamp'
+               '&q.op=&q.type=&q.value=NOW')
         self._do_test_get_history(q, url)
 
 
@@ -373,7 +374,7 @@ class AlarmLegacyManagerTest(testtools.TestCase):
         self.assertEqual(self.api.calls, expect)
         self.assertTrue(alarm)
         self.assertEqual(alarm.alarm_id, 'alarm-id')
-        for (key, value) in UPDATED_ALARM.iteritems():
+        for (key, value) in six.iteritems(UPDATED_ALARM):
             self.assertEqual(getattr(alarm, key), value)
 
     def test_update_counter_name(self):
@@ -389,5 +390,5 @@ class AlarmLegacyManagerTest(testtools.TestCase):
         self.assertEqual(self.api.calls, expect)
         self.assertTrue(alarm)
         self.assertEqual(alarm.alarm_id, 'alarm-id')
-        for (key, value) in UPDATED_ALARM.iteritems():
+        for (key, value) in six.iteritems(UPDATED_ALARM):
             self.assertEqual(getattr(alarm, key), value)

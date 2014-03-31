@@ -11,8 +11,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from ceilometerclient.openstack.common.py3kcompat import urlutils
 import re
-import urllib
 
 
 def build_url(path, q, params=None):
@@ -28,13 +28,17 @@ def build_url(path, q, params=None):
     if q:
         query_params = {'q.field': [],
                         'q.value': [],
-                        'q.op': []}
+                        'q.op': [],
+                        'q.type': []}
 
         for query in q:
-            for name in ['field', 'op', 'value']:
+            for name in ['field', 'op', 'value', 'type']:
                 query_params['q.%s' % name].append(query.get(name, ''))
 
-        path += "?" + urllib.urlencode(query_params, doseq=True)
+        # Transform the dict to a sequence of two-element tuples in fixed
+        # order, then the encoded string will be consistent in Python 2&3.
+        new_qparams = sorted(query_params.items(), key=lambda x: x[0])
+        path += "?" + urlutils.urlencode(new_qparams, doseq=True)
 
         if params:
             for p in params:
@@ -47,13 +51,15 @@ def build_url(path, q, params=None):
 
 
 def cli_to_array(cli_query):
-    '''This converts from the cli list of queries to what is required
+    """This converts from the cli list of queries to what is required
     by the python api.
     so from:
     "this<=34;that=foo"
     to
     "[{field=this,op=le,value=34},{field=that,op=eq,value=foo}]"
-    '''
+
+    """
+
     if cli_query is None:
         return None
 
@@ -74,12 +80,20 @@ def cli_to_array(cli_query):
                                string)
         return frags
 
+    def split_by_data_type(string):
+        frags = re.findall(r'^(string|integer|float|datetime|boolean)(::)'
+                           r'([^ -,\t\n\r\f\v]+)$', string)
+
+        # frags[1] is the separator. Return a list without it if the type
+        # identifier was found.
+        return [frags[0][0], frags[0][2]] if frags else None
+
     opts = []
     queries = cli_query.split(';')
     for q in queries:
         frag = split_by_op(q)
         if len(frag) > 1:
-            raise ValueError('incorrect seperator %s in query "%s"' %
+            raise ValueError('incorrect separator %s in query "%s"' %
                              ('(should be ";")', q))
         if len(frag) == 0:
             raise ValueError('invalid query %s' % q)
@@ -87,6 +101,15 @@ def cli_to_array(cli_query):
         opt = {}
         opt['field'] = query[0]
         opt['op'] = op_lookup[query[1]]
-        opt['value'] = query[2]
+
+        # Allow the data type of the value to be specified via <type>::<value>,
+        # where type can be one of integer, string, float, datetime, boolean
+        value_frags = split_by_data_type(query[2])
+        if not value_frags:
+            opt['value'] = query[2]
+            opt['type'] = ''
+        else:
+            opt['type'] = value_frags[0]
+            opt['value'] = value_frags[1]
         opts.append(opt)
     return opts

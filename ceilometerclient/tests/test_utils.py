@@ -14,7 +14,8 @@
 #    under the License.
 
 
-import cStringIO
+import mock
+import six
 import sys
 
 from ceilometerclient.common import utils
@@ -31,7 +32,7 @@ class UtilsTest(test_utils.BaseTestCase):
         # test that the prettytable output is wellformatted (left-aligned)
         saved_stdout = sys.stdout
         try:
-            sys.stdout = output_dict = cStringIO.StringIO()
+            sys.stdout = output_dict = six.StringIO()
             utils.print_dict({'K': 'k', 'Key': 'Value'})
 
         finally:
@@ -44,6 +45,64 @@ class UtilsTest(test_utils.BaseTestCase):
 | K        | k     |
 | Key      | Value |
 +----------+-------+
+''')
+
+    def test_print_list(self):
+        class Foo:
+            def __init__(self, one, two, three):
+                self.one = one
+                self.two = two
+                self.three = three
+
+        foo_list = [
+            Foo(10, 'a', 'B'),
+            Foo(8, 'c', 'c'),
+            Foo(12, '0', 'Z')]
+
+        def do_print_list(sortby):
+            saved_stdout = sys.stdout
+            try:
+                sys.stdout = output = six.StringIO()
+                utils.print_list(foo_list,
+                                 ['one', 'two', 'three'],
+                                 ['1st', '2nd', '3rd'],
+                                 {'one': lambda o: o.one * 10},
+                                 sortby)
+            finally:
+                sys.stdout = saved_stdout
+            return output.getvalue()
+
+        printed = do_print_list(None)
+        self.assertEqual(printed, '''\
++-----+-----+-----+
+| 1st | 2nd | 3rd |
++-----+-----+-----+
+| 100 | a   | B   |
+| 80  | c   | c   |
+| 120 | 0   | Z   |
++-----+-----+-----+
+''')
+
+        printed = do_print_list(0)
+        self.assertEqual(printed, '''\
++-----+-----+-----+
+| 1st | 2nd | 3rd |
++-----+-----+-----+
+| 80  | c   | c   |
+| 100 | a   | B   |
+| 120 | 0   | Z   |
++-----+-----+-----+
+''')
+
+        printed = do_print_list(1)
+        self.assertEqual(printed, '''\
++-----+-----+-----+
+| 1st | 2nd | 3rd |
++-----+-----+-----+
+| 120 | 0   | Z   |
+| 100 | a   | B   |
+| 80  | c   | c   |
++-----+-----+-----+
 ''')
 
     def test_args_array_to_dict(self):
@@ -124,3 +183,27 @@ class UtilsTest(test_utils.BaseTestCase):
         self.assertEqual(dest, {'key': 'modified',
                                 'nested': {'key3': 'modified3',
                                            'nested2': {'key5': 'value5'}}})
+
+    @mock.patch('prettytable.PrettyTable')
+    def test_format_nested_list_of_dict(self, pt_mock):
+        actual_rows = []
+
+        def mock_add_row(row):
+            actual_rows.append(row)
+
+        table = mock.Mock()
+        table.add_row = mock_add_row
+        table.get_string.return_value = "the table"
+
+        test_data = [
+            {'column_1': 'value_11', 'column_2': 'value_21'},
+            {'column_1': 'value_12', 'column_2': 'value_22'}
+
+        ]
+        columns = ['column_1', 'column_2']
+        pt_mock.return_value = table
+
+        rval = utils.format_nested_list_of_dict(test_data, columns)
+        self.assertEqual("the table", rval)
+        self.assertEqual([['value_11', 'value_21'], ['value_12', 'value_22']],
+                         actual_rows)

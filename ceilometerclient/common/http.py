@@ -14,12 +14,9 @@
 #    under the License.
 
 import copy
-import httplib
 import logging
 import os
 import socket
-import StringIO
-import urlparse
 
 try:
     import ssl
@@ -32,13 +29,11 @@ try:
 except ImportError:
     import simplejson as json
 
-# Python 2.5 compat fix
-if not hasattr(urlparse, 'parse_qsl'):
-    import cgi
-    urlparse.parse_qsl = cgi.parse_qsl
-
+import six
+from six.moves import http_client as httplib  # noqa
 
 from ceilometerclient import exc
+from ceilometerclient.openstack.common.py3kcompat import urlutils
 
 
 LOG = logging.getLogger(__name__)
@@ -52,10 +47,11 @@ class HTTPClient(object):
         self.endpoint = endpoint
         self.auth_token = kwargs.get('token')
         self.connection_params = self.get_connection_params(endpoint, **kwargs)
+        self.proxy_url = self.get_proxy_url()
 
     @staticmethod
     def get_connection_params(endpoint, **kwargs):
-        parts = urlparse.urlparse(endpoint)
+        parts = urlutils.urlparse(endpoint)
 
         _args = (parts.hostname, parts.port, parts.path)
         _kwargs = {'timeout': (float(kwargs.get('timeout'))
@@ -63,7 +59,7 @@ class HTTPClient(object):
 
         if parts.scheme == 'https':
             _class = VerifiedHTTPSConnection
-            _kwargs['ca_cert'] = kwargs.get('cacert', None)
+            _kwargs['cacert'] = kwargs.get('cacert', None)
             _kwargs['cert_file'] = kwargs.get('cert_file', None)
             _kwargs['key_file'] = kwargs.get('key_file', None)
             _kwargs['insecure'] = kwargs.get('insecure', False)
@@ -78,8 +74,13 @@ class HTTPClient(object):
     def get_connection(self):
         _class = self.connection_params[0]
         try:
-            return _class(*self.connection_params[1][0:2],
-                          **self.connection_params[2])
+            if self.proxy_url:
+                proxy_parts = urlutils.urlparse(self.proxy_url)
+                return _class(proxy_parts.hostname, proxy_parts.port,
+                              **self.connection_params[2])
+            else:
+                return _class(*self.connection_params[1][0:2],
+                              **self.connection_params[2])
         except httplib.InvalidURL:
             raise exc.InvalidEndpoint()
 
@@ -106,7 +107,7 @@ class HTTPClient(object):
         if 'body' in kwargs:
             curl.append('-d \'%s\'' % kwargs['body'])
 
-        curl.append('%s%s' % (self.endpoint, url))
+        curl.append('%s/%s' % (self.endpoint.rstrip('/'), url.lstrip('/')))
         LOG.debug(' '.join(curl))
 
     @staticmethod
@@ -141,7 +142,10 @@ class HTTPClient(object):
         conn = self.get_connection()
 
         try:
-            conn_url = self._make_connection_url(url)
+            if self.proxy_url:
+                conn_url = self.endpoint + self._make_connection_url(url)
+            else:
+                conn_url = self._make_connection_url(url)
             conn.request(method, conn_url, **kwargs)
             resp = conn.getresponse()
         except socket.gaierror as e:
@@ -160,13 +164,13 @@ class HTTPClient(object):
         if resp.getheader('content-type', None) != 'application/octet-stream':
             body_str = ''.join([chunk for chunk in body_iter])
             self.log_http_response(resp, body_str)
-            body_iter = StringIO.StringIO(body_str)
+            body_iter = six.StringIO(body_str)
         else:
             self.log_http_response(resp)
 
         if 400 <= resp.status < 600:
             LOG.warn("Request returned failure status.")
-            raise exc.from_response(resp)
+            raise exc.from_response(resp, ''.join(body_iter))
         elif resp.status in (301, 302, 305):
             # Redirected. Reissue the request to the new location.
             return self._http_request(resp['location'], method, **kwargs)
@@ -205,6 +209,15 @@ class HTTPClient(object):
         kwargs['headers'].setdefault('Content-Type',
                                      'application/octet-stream')
         return self._http_request(url, method, **kwargs)
+
+    def get_proxy_url(self):
+        scheme = urlutils.urlparse(self.endpoint).scheme
+        if scheme == 'https':
+            return os.environ.get('https_proxy')
+        elif scheme == 'http':
+            return os.environ.get('http_proxy')
+        msg = 'Unsupported scheme: %s' % scheme
+        raise exc.InvalidEndpoint(msg)
 
 
 class VerifiedHTTPSConnection(httplib.HTTPSConnection):
