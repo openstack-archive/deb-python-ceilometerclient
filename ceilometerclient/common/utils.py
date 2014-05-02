@@ -78,7 +78,7 @@ def format_nested_list_of_dict(l, column_names):
                                  header=True, hrules=prettytable.FRAME,
                                  field_names=column_names)
     for d in l:
-        pt.add_row(map(lambda k: d[k], column_names))
+        pt.add_row(list(map(lambda k: d[k], column_names)))
     return pt.get_string()
 
 
@@ -150,6 +150,27 @@ def args_array_to_dict(kwargs, key_to_convert):
         except ValueError:
             raise exc.CommandError(
                 '%s must be a list of key=value not "%s"' % (
+                    key_to_convert, values_to_convert))
+    return kwargs
+
+
+def args_array_to_list_of_dicts(kwargs, key_to_convert):
+    """Converts ['a=1;b=2','c=3;d=4'] to [{a:1,b:2},{c:3,d:4}]
+    """
+    values_to_convert = kwargs.get(key_to_convert)
+    if values_to_convert:
+        try:
+            kwargs[key_to_convert] = []
+            for lst in values_to_convert:
+                pairs = lst.split(";")
+                dct = dict()
+                for pair in pairs:
+                    kv = pair.split("=", 1)
+                    dct[kv[0]] = kv[1].strip(" \"'")  # strip spaces and quotes
+                kwargs[key_to_convert].append(dct)
+        except Exception:
+            raise exc.CommandError(
+                '%s must be a list of key1=value1;key2=value2;... not "%s"' % (
                     key_to_convert, values_to_convert))
     return kwargs
 

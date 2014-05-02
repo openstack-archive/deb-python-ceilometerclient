@@ -1,3 +1,8 @@
+# Copyright Ericsson AB 2014. All rights reserved
+#
+# Authors: Balazs Gibizer <balazs.gibizer@ericsson.com>
+#          Ildiko Vancsa <ildiko.vancsa@ericsson.com>
+#
 #   Licensed under the Apache License, Version 2.0 (the "License"); you may
 #   not use this file except in compliance with the License. You may obtain
 #   a copy of the License at
@@ -22,6 +27,7 @@ from ceilometerclient.tests import utils
 from ceilometerclient.v2 import alarms
 from ceilometerclient.v2 import samples
 from ceilometerclient.v2 import shell as ceilometer_shell
+from ceilometerclient.v2 import statistics
 
 
 class ShellAlarmStateCommandsTest(utils.BaseTestCase):
@@ -158,6 +164,16 @@ class ShellAlarmCommandTest(utils.BaseTestCase):
                                            "value": "INSTANCE_ID",
                                            "op": "eq"}],
                                 "comparison_operator": "gt"},
+             "time_constraints": [{"name": "cons1",
+                                   "description": "desc1",
+                                   "start": "0 11 * * *",
+                                   "duration": 300,
+                                   "timezone": ""},
+                                  {"name": "cons2",
+                                   "description": "desc2",
+                                   "start": "0 23 * * *",
+                                   "duration": 600,
+                                   "timezone": ""}],
              "alarm_id": ALARM_ID,
              "state": "insufficient data",
              "insufficient_data_actions": [],
@@ -276,6 +292,36 @@ class ShellAlarmCommandTest(utils.BaseTestCase):
             sys.stdout.close()
             sys.stdout = orig
 
+    def test_alarm_create_time_constraints(self):
+        shell = base_shell.CeilometerShell()
+        argv = ['alarm-threshold-create',
+                '--name', 'cpu_high',
+                '--meter-name', 'cpu_util',
+                '--threshold', '70.0',
+                '--time-constraint',
+                'name=cons1;start="0 11 * * *";duration=300',
+                '--time-constraint',
+                'name=cons2;start="0 23 * * *";duration=600',
+                ]
+        _, args = shell.parse_args(argv)
+
+        orig = sys.stdout
+        sys.stdout = six.StringIO()
+        alarm = alarms.Alarm(mock.Mock(), self.ALARM)
+        self.cc.alarms.create.return_value = alarm
+
+        try:
+            ceilometer_shell.do_alarm_threshold_create(self.cc, args)
+            _, kwargs = self.cc.alarms.create.call_args
+            time_constraints = [dict(name='cons1', start='0 11 * * *',
+                                     duration='300'),
+                                dict(name='cons2', start='0 23 * * *',
+                                     duration='600')]
+            self.assertEqual(time_constraints, kwargs['time_constraints'])
+        finally:
+            sys.stdout.close()
+            sys.stdout = orig
+
 
 class ShellSampleListCommandTest(utils.BaseTestCase):
 
@@ -308,7 +354,6 @@ class ShellSampleListCommandTest(utils.BaseTestCase):
     def setUp(self):
         super(ShellSampleListCommandTest, self).setUp()
         self.cc = mock.Mock()
-        self.cc.alarms = mock.Mock()
         self.args = mock.Mock()
         self.args.meter = self.METER
         self.args.query = None
@@ -411,3 +456,335 @@ class ShellSampleCreateCommandTest(utils.BaseTestCase):
 | volume            | 1.0                                         |
 +-------------------+---------------------------------------------+
 ''')
+
+
+class ShellQuerySamplesCommandTest(utils.BaseTestCase):
+
+    SAMPLE = [{u'id': u'b55d1526-9929-11e3-a3f6-02163e5df1e6',
+               u'metadata': {
+                   u'name1': u'value1',
+                   u'name2': u'value2'},
+               u'meter': 'instance',
+               u'project_id': u'35b17138-b364-4e6a-a131-8f3099c5be68',
+               u'resource_id': u'bd9431c1-8d69-4ad3-803a-8d4a6b89fd36',
+               u'source': u'openstack',
+               u'timestamp': u'2014-02-19T05:50:16.673604',
+               u'type': u'gauge',
+               u'unit': u'instance',
+               u'volume': 1,
+               u'user_id': 'efd87807-12d2-4b38-9c70-5f5c2ac427ff'}]
+
+    QUERY = {"filter": {"and": [{"=": {"source": "openstack"}},
+                                {">": {"timestamp": "2014-02-19T05:50:16"}}]},
+             "orderby": [{"timestamp": "desc"}, {"volume": "asc"}],
+             "limit": 10}
+
+    def setUp(self):
+        super(ShellQuerySamplesCommandTest, self).setUp()
+        self.cc = mock.Mock()
+        self.args = mock.Mock()
+        self.args.filter = self.QUERY["filter"]
+        self.args.orderby = self.QUERY["orderby"]
+        self.args.limit = self.QUERY["limit"]
+
+    def test_query(self):
+
+        ret_sample = [samples.Sample(mock.Mock(), sample)
+                      for sample in self.SAMPLE]
+        self.cc.query_samples.query.return_value = ret_sample
+        org_stdout = sys.stdout
+        try:
+            sys.stdout = output = six.StringIO()
+            ceilometer_shell.do_query_samples(self.cc, self.args)
+        finally:
+            sys.stdout = org_stdout
+
+        self.assertEqual('''\
++--------------------------------------+----------+-------+--------+---------\
+-+----------------------------+
+| Resource ID                          | Meter    | Type  | Volume | Unit    \
+ | Timestamp                  |
++--------------------------------------+----------+-------+--------+---------\
+-+----------------------------+
+| bd9431c1-8d69-4ad3-803a-8d4a6b89fd36 | instance | gauge | 1      | instance\
+ | 2014-02-19T05:50:16.673604 |
++--------------------------------------+----------+-------+--------+---------\
+-+----------------------------+
+''', output.getvalue())
+
+
+class ShellQueryAlarmsCommandTest(utils.BaseTestCase):
+
+    ALARM = [{"alarm_actions": ["http://site:8000/alarm"],
+              "alarm_id": "768ff714-8cfb-4db9-9753-d484cb33a1cc",
+              "combination_rule": {
+                  "alarm_ids": [
+                      "739e99cb-c2ec-4718-b900-332502355f38",
+                      "153462d0-a9b8-4b5b-8175-9e4b05e9b856"],
+                  "operator": "or"},
+              "description": "An alarm",
+              "enabled": True,
+              "insufficient_data_actions": ["http://site:8000/nodata"],
+              "name": "SwiftObjectAlarm",
+              "ok_actions": ["http://site:8000/ok"],
+              "project_id": "c96c887c216949acbdfbd8b494863567",
+              "repeat_actions": False,
+              "state": "ok",
+              "state_timestamp": "2014-02-20T10:37:15.589860",
+              "threshold_rule": None,
+              "timestamp": "2014-02-20T10:37:15.589856",
+              "type": "combination",
+              "user_id": "c96c887c216949acbdfbd8b494863567"}]
+
+    QUERY = {"filter": {"and": [{"!=": {"state": "ok"}},
+                                {"=": {"type": "combination"}}]},
+             "orderby": [{"state_timestamp": "desc"}],
+             "limit": 10}
+
+    def setUp(self):
+        super(ShellQueryAlarmsCommandTest, self).setUp()
+        self.cc = mock.Mock()
+        self.args = mock.Mock()
+        self.args.filter = self.QUERY["filter"]
+        self.args.orderby = self.QUERY["orderby"]
+        self.args.limit = self.QUERY["limit"]
+
+    def test_query(self):
+
+        ret_alarm = [alarms.Alarm(mock.Mock(), alarm)
+                     for alarm in self.ALARM]
+        self.cc.query_alarms.query.return_value = ret_alarm
+        org_stdout = sys.stdout
+        try:
+            sys.stdout = output = six.StringIO()
+            ceilometer_shell.do_query_alarms(self.cc, self.args)
+        finally:
+            sys.stdout = org_stdout
+
+        self.assertEqual('''\
++--------------------------------------+------------------+-------+---------\
++------------+--------------------------------------------------------------\
+----------------------------------------+
+| Alarm ID                             | Name             | State | Enabled \
+| Continuous | Alarm condition                                              \
+                                        |
++--------------------------------------+------------------+-------+---------\
++------------+--------------------------------------------------------------\
+----------------------------------------+
+| 768ff714-8cfb-4db9-9753-d484cb33a1cc | SwiftObjectAlarm | ok    | True    \
+| False      | combinated states (OR) of 739e99cb-c2ec-4718-b900-332502355f3\
+8, 153462d0-a9b8-4b5b-8175-9e4b05e9b856 |
++--------------------------------------+------------------+-------+---------\
++------------+--------------------------------------------------------------\
+----------------------------------------+
+''', output.getvalue())
+
+
+class ShellQueryAlarmHistoryCommandTest(utils.BaseTestCase):
+
+    ALARM_HISTORY = [{"alarm_id": "e8ff32f772a44a478182c3fe1f7cad6a",
+                      "event_id": "c74a8611-6553-4764-a860-c15a6aabb5d0",
+                      "detail":
+                      "{\"threshold\": 42.0, \"evaluation_periods\": 4}",
+                      "on_behalf_of": "92159030020611e3b26dde429e99ee8c",
+                      "project_id": "b6f16144010811e387e4de429e99ee8c",
+                      "timestamp": "2014-03-11T16:02:58.376261",
+                      "type": "rule change",
+                      "user_id": "3e5d11fda79448ac99ccefb20be187ca"
+                      }]
+
+    QUERY = {"filter": {"and": [{">": {"timestamp": "2014-03-11T16:02:58"}},
+                                {"=": {"type": "rule change"}}]},
+             "orderby": [{"timestamp": "desc"}],
+             "limit": 10}
+
+    def setUp(self):
+        super(ShellQueryAlarmHistoryCommandTest, self).setUp()
+        self.cc = mock.Mock()
+        self.args = mock.Mock()
+        self.args.filter = self.QUERY["filter"]
+        self.args.orderby = self.QUERY["orderby"]
+        self.args.limit = self.QUERY["limit"]
+
+    def test_query(self):
+
+        ret_alarm_history = [alarms.AlarmChange(mock.Mock(), alarm_history)
+                             for alarm_history in self.ALARM_HISTORY]
+        self.cc.query_alarm_history.query.return_value = ret_alarm_history
+        org_stdout = sys.stdout
+        try:
+            sys.stdout = output = six.StringIO()
+            ceilometer_shell.do_query_alarm_history(self.cc, self.args)
+        finally:
+            sys.stdout = org_stdout
+
+        self.assertEqual('''\
++----------------------------------+--------------------------------------+-\
+------------+----------------------------------------------+----------------\
+------------+
+| Alarm ID                         | Event ID                             | \
+Type        | Detail                                       | Timestamp      \
+            |
++----------------------------------+--------------------------------------+-\
+------------+----------------------------------------------+----------------\
+------------+
+| e8ff32f772a44a478182c3fe1f7cad6a | c74a8611-6553-4764-a860-c15a6aabb5d0 | \
+rule change | {"threshold": 42.0, "evaluation_periods": 4} | 2014-03-11T16:0\
+2:58.376261 |
++----------------------------------+--------------------------------------+-\
+------------+----------------------------------------------+----------------\
+------------+
+''', output.getvalue())
+
+
+class ShellStatisticsTest(utils.BaseTestCase):
+    def setUp(self):
+        super(ShellStatisticsTest, self).setUp()
+        self.cc = mock.Mock()
+        self.displays = {
+            'duration': 'Duration',
+            'duration_end': 'Duration End',
+            'duration_start': 'Duration Start',
+            'period': 'Period',
+            'period_end': 'Period End',
+            'period_start': 'Period Start',
+            'groupby': 'Group By',
+            'avg': 'Avg',
+            'count': 'Count',
+            'max': 'Max',
+            'min': 'Min',
+            'sum': 'Sum',
+            'stddev': 'Standard deviation',
+            'cardinality': 'Cardinality'
+        }
+        self.args = mock.Mock()
+        self.args.meter_name = 'instance'
+        self.args.aggregate = []
+        self.args.groupby = None
+        self.args.query = None
+
+    def test_statistics_list_simple(self):
+        samples = [
+            {u'count': 135,
+             u'duration_start': u'2013-02-04T10:51:42',
+             u'min': 1.0,
+             u'max': 1.0,
+             u'duration_end':
+             u'2013-02-05T15:46:09',
+             u'duration': 1734.0,
+             u'avg': 1.0,
+             u'sum': 135.0},
+        ]
+        fields = [
+            'period',
+            'period_start',
+            'period_end',
+            'max',
+            'min',
+            'avg',
+            'sum',
+            'count',
+            'duration',
+            'duration_start',
+            'duration_end',
+        ]
+        statistics_ret = [
+            statistics.Statistics(mock.Mock(), sample) for sample in samples
+        ]
+        self.cc.statistics.list.return_value = statistics_ret
+        with mock.patch('ceilometerclient.v2.shell.utils.print_list') as pmock:
+            ceilometer_shell.do_statistics(self.cc, self.args)
+            pmock.assert_called_with(
+                statistics_ret,
+                fields,
+                [self.displays[f] for f in fields]
+            )
+
+    def test_statistics_list_groupby(self):
+        samples = [
+            {u'count': 135,
+             u'duration_start': u'2013-02-04T10:51:42',
+             u'min': 1.0,
+             u'max': 1.0,
+             u'duration_end':
+             u'2013-02-05T15:46:09',
+             u'duration': 1734.0,
+             u'avg': 1.0,
+             u'sum': 135.0,
+             u'groupby': {u'resource_id': u'foo'}
+             },
+            {u'count': 12,
+             u'duration_start': u'2013-02-04T10:51:42',
+             u'min': 1.0,
+             u'max': 1.0,
+             u'duration_end':
+             u'2013-02-05T15:46:09',
+             u'duration': 1734.0,
+             u'avg': 1.0,
+             u'sum': 12.0,
+             u'groupby': {u'resource_id': u'bar'}
+             },
+        ]
+        fields = [
+            'period',
+            'period_start',
+            'period_end',
+            'groupby',
+            'max',
+            'min',
+            'avg',
+            'sum',
+            'count',
+            'duration',
+            'duration_start',
+            'duration_end',
+        ]
+        self.args.groupby = 'resource_id'
+        statistics_ret = [
+            statistics.Statistics(mock.Mock(), sample) for sample in samples
+        ]
+        self.cc.statistics.list.return_value = statistics_ret
+        with mock.patch('ceilometerclient.v2.shell.utils.print_list') as pmock:
+            ceilometer_shell.do_statistics(self.cc, self.args)
+            pmock.assert_called_with(
+                statistics_ret,
+                fields,
+                [self.displays[f] for f in fields],
+            )
+
+    def test_statistics_list_aggregates(self):
+        samples = [
+            {u'aggregate': {u'cardinality/resource_id': 4.0, u'count': 2.0},
+             u'count': 2,
+             u'duration': 0.442451,
+             u'duration_end': u'2014-03-12T14:00:21.774154',
+             u'duration_start': u'2014-03-12T14:00:21.331703',
+             u'groupby': None,
+             u'period': 0,
+             u'period_end': u'2014-03-12T14:00:21.774154',
+             u'period_start': u'2014-03-12T14:00:21.331703',
+             u'unit': u'instance',
+             },
+        ]
+        fields = [
+            'period',
+            'period_start',
+            'period_end',
+            'count',
+            'cardinality/resource_id',
+            'duration',
+            'duration_start',
+            'duration_end',
+        ]
+        self.args.aggregate = ['count', 'cardinality<-resource_id']
+        statistics_ret = [
+            statistics.Statistics(mock.Mock(), sample) for sample in samples
+        ]
+        self.cc.statistics.list.return_value = statistics_ret
+        with mock.patch('ceilometerclient.v2.shell.utils.print_list') as pmock:
+            ceilometer_shell.do_statistics(self.cc, self.args)
+            pmock.assert_called_with(
+                statistics_ret,
+                fields,
+                [self.displays.get(f, f) for f in fields],
+            )

@@ -1,8 +1,11 @@
 # -*- encoding: utf-8 -*-
 #
 # Copyright © 2013 Red Hat, Inc
+# Copyright Ericsson AB 2014. All rights reserved
 #
-# Author:  Angus Salkeld <asalkeld@redhat.com>
+# Authors: Angus Salkeld <asalkeld@redhat.com>
+#          Balazs Gibizer <balazs.gibizer@ericsson.com>
+#          Ildiko Vancsa <ildiko.vancsa@ericsson.com>
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -30,46 +33,78 @@ ALARM_STATES = ['ok', 'alarm', 'insufficient_data']
 ALARM_OPERATORS = ['lt', 'le', 'eq', 'ne', 'ge', 'gt']
 ALARM_COMBINATION_OPERATORS = ['and', 'or']
 STATISTICS = ['max', 'min', 'avg', 'sum', 'count']
+AGGREGATES = {'avg': 'Avg',
+              'count': 'Count',
+              'max': 'Max',
+              'min': 'Min',
+              'sum': 'Sum',
+              'stddev': 'Standard deviation',
+              'cardinality': 'Cardinality'}
 OPERATORS_STRING = dict(gt='>', ge='>=',
                         lt='<', le="<=",
                         eq='==', ne='!=')
+ORDER_DIRECTIONS = ['asc', 'desc']
+COMPLEX_OPERATORS = ['and', 'or']
+SIMPLE_OPERATORS = ["=", "!=", "<", "<=", '>', '>=']
 
 
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
-                'but if supplied must be string, integer, float, or boolean')
+                'but if supplied must be string, integer, float, or boolean.')
 @utils.arg('-m', '--meter', metavar='<NAME>', required=True,
            help='Name of meter to show samples for.')
 @utils.arg('-p', '--period', metavar='<PERIOD>',
            help='Period in seconds over which to group samples.')
 @utils.arg('-g', '--groupby', metavar='<FIELD>', action='append',
-           help='Field for group aggregation.')
+           help='Field for group by.')
+@utils.arg('-a', '--aggregate', metavar='<FUNC>[<-<PARAM>]', action='append',
+           default=[], help=('Function for data aggregation. '
+                 'Available aggregates are: '
+                 '%s.' % ", ".join(AGGREGATES.keys())))
 def do_statistics(cc, args):
     '''List the statistics for a meter.'''
-    fields = {'meter_name': args.meter,
-              'q': options.cli_to_array(args.query),
-              'period': args.period,
-              'groupby': args.groupby}
+    aggregates = []
+    for a in args.aggregate:
+        aggregates.append(dict(zip(('func', 'param'), a.split("<-"))))
+    api_args = {'meter_name': args.meter,
+                'q': options.cli_to_array(args.query),
+                'period': args.period,
+                'groupby': args.groupby,
+                'aggregates': aggregates}
     try:
-        statistics = cc.statistics.list(**fields)
+        statistics = cc.statistics.list(**api_args)
     except exc.HTTPNotFound:
         raise exc.CommandError('Samples not found: %s' % args.meter)
     else:
-        field_labels = ['Period', 'Period Start', 'Period End',
-                        'Count', 'Min', 'Max', 'Sum', 'Avg',
-                        'Duration', 'Duration Start', 'Duration End']
-        fields = ['period', 'period_start', 'period_end',
-                  'count', 'min', 'max', 'sum', 'avg',
-                  'duration', 'duration_start', 'duration_end']
+        fields_display = {'duration': 'Duration',
+                          'duration_end': 'Duration End',
+                          'duration_start': 'Duration Start',
+                          'period': 'Period',
+                          'period_end': 'Period End',
+                          'period_start': 'Period Start',
+                          'groupby': 'Group By'}
+        fields_display.update(AGGREGATES)
+        fields = ['period', 'period_start', 'period_end']
         if args.groupby:
-            field_labels.append('Group By')
             fields.append('groupby')
-        utils.print_list(statistics, fields, field_labels)
+        if args.aggregate:
+            for a in aggregates:
+                if 'param' in a:
+                    fields.append("%(func)s/%(param)s" % a)
+                else:
+                    fields.append(a['func'])
+            for stat in statistics:
+                stat.__dict__.update(stat.aggregate)
+        else:
+            fields.extend(['max', 'min', 'avg', 'sum', 'count'])
+        fields.extend(['duration', 'duration_start', 'duration_end'])
+        cols = [fields_display.get(f, f) for f in fields]
+        utils.print_list(statistics, fields, cols)
 
 
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
-                'but if supplied must be string, integer, float, or boolean')
+                'but if supplied must be string, integer, float, or boolean.')
 @utils.arg('-m', '--meter', metavar='<NAME>', required=True,
            help='Name of meter to show samples for.')
 @utils.arg('-l', '--limit', metavar='<NUMBER>',
@@ -94,24 +129,24 @@ def do_sample_list(cc, args):
 
 @utils.arg('--project-id', metavar='<PROJECT_ID>',
            help='Tenant to associate with sample '
-                '(only settable by admin users)')
+                '(only settable by admin users).')
 @utils.arg('--user-id', metavar='<USER_ID>',
            help='User to associate with sample '
-                '(only settable by admin users)')
+                '(only settable by admin users).')
 @utils.arg('-r', '--resource-id', metavar='<RESOURCE_ID>', required=True,
            help='ID of the resource.')
 @utils.arg('-m', '--meter-name', metavar='<METER_NAME>', required=True,
-           help='the meter name')
+           help='The meter name.')
 @utils.arg('--meter-type', metavar='<METER_TYPE>', required=True,
-           help='the meter type')
+           help='The meter type.')
 @utils.arg('--meter-unit', metavar='<METER_UNIT>', required=True,
-           help='the meter unit')
+           help='The meter unit.')
 @utils.arg('--sample-volume', metavar='<SAMPLE_VOLUME>', required=True,
-           help='The sample volume')
+           help='The sample volume.')
 @utils.arg('--resource-metadata', metavar='<RESOURCE_METADATA>',
-           help='resource metadata')
+           help='Resource metadata.')
 @utils.arg('--timestamp', metavar='<TIMESTAMP>',
-           help='the sample timestamp')
+           help='The sample timestamp.')
 def do_sample_create(cc, args={}):
     '''Create a sample.'''
     arg_to_field_mapping = {'meter_name': 'counter_name',
@@ -138,7 +173,7 @@ def do_sample_create(cc, args={}):
 
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
-                'but if supplied must be string, integer, float, or boolean')
+                'but if supplied must be string, integer, float, or boolean.')
 def do_meter_list(cc, args={}):
     '''List the user's meters.'''
     meters = cc.meters.list(q=options.cli_to_array(args.query))
@@ -176,6 +211,24 @@ def alarm_rule_formatter(alarm):
     return _display_rule(alarm.type, alarm.rule)
 
 
+def _display_time_constraints(time_constraints):
+    if time_constraints:
+        return ', '.join('%(name)s at %(start)s %(timezone)s for %(duration)ss'
+                         % {
+                             'name': tc['name'],
+                             'start': tc['start'],
+                             'duration': tc['duration'],
+                             'timezone': tc.get('timezone', '')
+                         }
+                         for tc in time_constraints)
+    else:
+        return 'None'
+
+
+def time_constraints_formatter(alarm):
+    return _display_time_constraints(alarm.time_constraints)
+
+
 def _infer_type(detail):
     if 'type' in detail:
         return detail['type']
@@ -199,6 +252,10 @@ def alarm_change_detail_formatter(change):
                                                          detail[k]))
             else:
                 fields.append('%s: %s' % (k, detail[k]))
+        if 'time_constraints' in detail:
+            fields.append('time_constraints: %s' %
+                          _display_time_constraints(
+                              detail['time_constraints']))
     elif change.type == 'rule change':
         for k, v in six.iteritems(detail):
             if k == 'rule':
@@ -211,18 +268,20 @@ def alarm_change_detail_formatter(change):
 
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
-                'but if supplied must be string, integer, float, or boolean')
+                'but if supplied must be string, integer, float, or boolean.')
 def do_alarm_list(cc, args={}):
     '''List the user's alarms.'''
     alarms = cc.alarms.list(q=options.cli_to_array(args.query))
     # omit action initially to keep output width sane
     # (can switch over to vertical formatting when available from CLIFF)
     field_labels = ['Alarm ID', 'Name', 'State', 'Enabled', 'Continuous',
-                    'Alarm condition']
+                    'Alarm condition', 'Time constraints']
     fields = ['alarm_id', 'name', 'state', 'enabled', 'repeat_actions',
-              'rule']
-    utils.print_list(alarms, fields, field_labels,
-                     formatters={'rule': alarm_rule_formatter}, sortby=0)
+              'rule', 'time_constraints']
+    utils.print_list(
+        alarms, fields, field_labels,
+        formatters={'rule': alarm_rule_formatter,
+                    'time_constraints': time_constraints_formatter}, sortby=0)
 
 
 def alarm_query_formater(alarm):
@@ -231,6 +290,17 @@ def alarm_query_formater(alarm):
         qs.append('%s %s %s' % (
             q['field'], OPERATORS_STRING.get(q['op']), q['value']))
     return r' AND\n'.join(qs)
+
+
+def alarm_time_constraints_formatter(alarm):
+    time_constraints = []
+    for tc in alarm.time_constraints:
+        lines = []
+        for k in ['name', 'description', 'start', 'duration', 'timezone']:
+            if k in tc and tc[k]:
+                lines.append(r'%s: %s' % (k, tc[k]))
+        time_constraints.append('{' + r',\n  '.join(lines) + '}')
+    return '[' + r',\n '.join(time_constraints) + ']'
 
 
 def _display_alarm(alarm):
@@ -242,6 +312,8 @@ def _display_alarm(alarm):
     data.update(alarm.rule)
     if alarm.type == 'threshold':
         data['query'] = alarm_query_formater(alarm)
+    if alarm.time_constraints:
+        data['time_constraints'] = alarm_time_constraints_formatter(alarm)
     utils.print_dict(data, wrap=72)
 
 
@@ -260,20 +332,20 @@ def do_alarm_show(cc, args={}):
 def common_alarm_arguments(create=False):
     def _wrapper(func):
         @utils.arg('--name', metavar='<NAME>', required=create,
-                   help='Name of the alarm (must be unique per tenant)')
+                   help='Name of the alarm (must be unique per tenant).')
         @utils.arg('--project-id', metavar='<PROJECT_ID>',
                    help='Tenant to associate with alarm '
-                   '(only settable by admin users)')
+                   '(only settable by admin users).')
         @utils.arg('--user-id', metavar='<USER_ID>',
                    help='User to associate with alarm '
-                   '(only settable by admin users)')
+                   '(only settable by admin users).')
         @utils.arg('--description', metavar='<DESCRIPTION>',
-                   help='Free text description of the alarm')
+                   help='Free text description of the alarm.')
         @utils.arg('--state', metavar='<STATE>',
                    help='State of the alarm, one of: ' + str(ALARM_STATES))
         @utils.arg('--enabled', type=strutils.bool_from_string,
                    metavar='{True|False}',
-                   help='True if alarm evaluation/actioning is enabled')
+                   help='True if alarm evaluation/actioning is enabled.')
         @utils.arg('--alarm-action', dest='alarm_actions',
                    metavar='<Webhook URL>', action='append', default=None,
                    help=('URL to invoke when state transitions to alarm. '
@@ -287,6 +359,18 @@ def common_alarm_arguments(create=False):
                    metavar='<Webhook URL>', action='append', default=None,
                    help=('URL to invoke when state transitions to '
                          'insufficient_data. May be used multiple times.'))
+        @utils.arg('--time-constraint', dest='time_constraints',
+                   metavar='<Time Constraint>', action='append',
+                   default=None,
+                   help=('Only evaluate the alarm if the time at evaluation '
+                         'is within this time constraint. Start point(s) of '
+                         'the constraint are specified with a cron expression '
+                         ', whereas its duration is given in seconds. '
+                         'Can be specified multiple times for multiple '
+                         'time constraints, format is: '
+                         'name=<CONSTRAINT_NAME>;start=<CRON>;'
+                         'duration=<SECONDS>;[description=<DESCRIPTION>;'
+                         '[timezone=<IANA Timezone>]]'))
         @functools.wraps(func)
         def _wrapped(*args, **kwargs):
             return func(*args, **kwargs)
@@ -296,29 +380,31 @@ def common_alarm_arguments(create=False):
 
 @common_alarm_arguments(create=True)
 @utils.arg('--period', type=int, metavar='<PERIOD>',
-           help='Length of each period (seconds) to evaluate over')
+           help='Length of each period (seconds) to evaluate over.')
 @utils.arg('--evaluation-periods', type=int, metavar='<COUNT>',
-           help='Number of periods to evaluate over')
+           help='Number of periods to evaluate over.')
 @utils.arg('-m', '--meter-name', metavar='<METRIC>', required=True,
-           help='Metric to evaluate against')
+           help='Metric to evaluate against.')
 @utils.arg('--statistic', metavar='<STATISTIC>',
-           help='Statistic to evaluate, one of: ' + str(STATISTICS))
+           help='Statistic to evaluate, one of: ' + str(STATISTICS) + '.')
 @utils.arg('--comparison-operator', metavar='<OPERATOR>',
-           help='Operator to compare with, one of: ' + str(ALARM_OPERATORS))
+           help='Operator to compare with, one of: ' + str(ALARM_OPERATORS) +
+           '.')
 @utils.arg('--threshold', type=float, metavar='<THRESHOLD>', required=True,
-           help='Threshold to evaluate against')
+           help='Threshold to evaluate against.')
 @utils.arg('--matching-metadata', dest='matching_metadata',
            metavar='<Matching Metadata>', action='append', default=None,
            help=('A meter should match this resource metadata (key=value) '
-                 'additionally to the meter_name'))
+                 'additionally to the meter_name.'))
 @utils.arg('--repeat-actions', dest='repeat_actions',
            metavar='{True|False}', type=strutils.bool_from_string,
            default=False,
            help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state'))
+                 'while alarm remains in target state.'))
 def do_alarm_create(cc, args={}):
-    '''Create a new alarm (Deprecated).'''
+    '''Create a new alarm (Deprecated). Use alarm-threshold-create instead.'''
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_list_of_dicts(fields, "time_constraints")
     fields = utils.args_array_to_dict(fields, "matching_metadata")
     alarm = cc.alarms.create(**fields)
     _display_alarm(alarm)
@@ -327,34 +413,36 @@ def do_alarm_create(cc, args={}):
 @common_alarm_arguments(create=True)
 @utils.arg('-m', '--meter-name', metavar='<METRIC>', required=True,
            dest='threshold_rule/meter_name',
-           help='Metric to evaluate against')
+           help='Metric to evaluate against.')
 @utils.arg('--period', type=int, metavar='<PERIOD>',
            dest='threshold_rule/period',
-           help='Length of each period (seconds) to evaluate over')
+           help='Length of each period (seconds) to evaluate over.')
 @utils.arg('--evaluation-periods', type=int, metavar='<COUNT>',
            dest='threshold_rule/evaluation_periods',
-           help='Number of periods to evaluate over')
+           help='Number of periods to evaluate over.')
 @utils.arg('--statistic', metavar='<STATISTIC>',
            dest='threshold_rule/statistic',
-           help='Statistic to evaluate, one of: ' + str(STATISTICS))
+           help='Statistic to evaluate, one of: ' + str(STATISTICS) + '.')
 @utils.arg('--comparison-operator', metavar='<OPERATOR>',
            dest='threshold_rule/comparison_operator',
-           help='Operator to compare with, one of: ' + str(ALARM_OPERATORS))
+           help='Operator to compare with, one of: ' + str(ALARM_OPERATORS) +
+           '.')
 @utils.arg('--threshold', type=float, metavar='<THRESHOLD>', required=True,
            dest='threshold_rule/threshold',
-           help='Threshold to evaluate against')
+           help='Threshold to evaluate against.')
 @utils.arg('-q', '--query', metavar='<QUERY>',
            dest='threshold_rule/query',
            help='key[op]data_type::value; list. data_type is optional, '
-                'but if supplied must be string, integer, float, or boolean')
+                'but if supplied must be string, integer, float, or boolean.')
 @utils.arg('--repeat-actions', dest='repeat_actions',
            metavar='{True|False}', type=strutils.bool_from_string,
            default=False,
            help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state'))
+                 'while alarm remains in target state.'))
 def do_alarm_threshold_create(cc, args={}):
     '''Create a new alarm based on computed statistics.'''
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
     fields = utils.key_with_slash_to_nested_dict(fields)
     fields['type'] = 'threshold'
     if 'query' in fields['threshold_rule']:
@@ -367,19 +455,20 @@ def do_alarm_threshold_create(cc, args={}):
 @common_alarm_arguments(create=True)
 @utils.arg('--alarm_ids', action='append', metavar='<ALARM IDS>',
            required=True, dest='combination_rule/alarm_ids',
-           help='List of alarm id')
+           help='List of alarm ids.')
 @utils.arg('--operator', metavar='<OPERATOR>',
            dest='combination_rule/operator',
            help='Operator to compare with, one of: ' + str(
-               ALARM_COMBINATION_OPERATORS))
+               ALARM_COMBINATION_OPERATORS) + '.')
 @utils.arg('--repeat-actions', dest='repeat_actions',
            metavar='{True|False}', type=strutils.bool_from_string,
            default=False,
            help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state'))
+                 'while alarm remains in target state.'))
 def do_alarm_combination_create(cc, args={}):
     '''Create a new alarm based on state of other alarms.'''
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
     fields = utils.key_with_slash_to_nested_dict(fields)
     fields['type'] = 'combination'
     alarm = cc.alarms.create(**fields)
@@ -389,29 +478,35 @@ def do_alarm_combination_create(cc, args={}):
 @utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
            help='ID of the alarm to update.')
 @common_alarm_arguments()
+@utils.arg('--remove-time-constraint', action='append',
+           metavar='<Constraint names>',
+           dest='remove_time_constraints',
+           help='Name or list of names of the time constraints to remove.')
 @utils.arg('--period', type=int, metavar='<PERIOD>',
-           help='Length of each period (seconds) to evaluate over')
+           help='Length of each period (seconds) to evaluate over.')
 @utils.arg('--evaluation-periods', type=int, metavar='<COUNT>',
-           help='Number of periods to evaluate over')
+           help='Number of periods to evaluate over.')
 @utils.arg('-m', '--meter-name', metavar='<METRIC>',
-           help='Metric to evaluate against')
+           help='Metric to evaluate against.')
 @utils.arg('--statistic', metavar='<STATISTIC>',
            help='Statistic to evaluate, one of: ' + str(STATISTICS))
 @utils.arg('--comparison-operator', metavar='<OPERATOR>',
-           help='Operator to compare with, one of: ' + str(ALARM_OPERATORS))
+           help='Operator to compare with, one of: ' + str(ALARM_OPERATORS) +
+           '.')
 @utils.arg('--threshold', type=float, metavar='<THRESHOLD>',
-           help='Threshold to evaluate against')
+           help='Threshold to evaluate against.')
 @utils.arg('--matching-metadata', dest='matching_metadata',
            metavar='<Matching Metadata>', action='append', default=None,
            help=('A meter should match this resource metadata (key=value) '
-                 'additionally to the meter_name'))
+                 'additionally to the meter_name.'))
 @utils.arg('--repeat-actions', dest='repeat_actions',
            metavar='{True|False}', type=strutils.bool_from_string,
            help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state'))
+                 'while alarm remains in target state.'))
 def do_alarm_update(cc, args={}):
-    '''Update an existing alarm.'''
+    '''Update an existing alarm (Deprecated).'''
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_list_of_dicts(fields, "time_constraints")
     fields = utils.args_array_to_dict(fields, "matching_metadata")
     fields.pop('alarm_id')
     try:
@@ -424,34 +519,41 @@ def do_alarm_update(cc, args={}):
 @utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
            help='ID of the alarm to update.')
 @common_alarm_arguments()
+@utils.arg('--remove-time-constraint', action='append',
+           metavar='<Constraint names>',
+           dest='remove_time_constraints',
+           help='Name or list of names of the time constraints to remove.')
 @utils.arg('-m', '--meter-name', metavar='<METRIC>',
            dest='threshold_rule/meter_name',
-           help='Metric to evaluate against')
+           help='Metric to evaluate against.')
 @utils.arg('--period', type=int, metavar='<PERIOD>',
            dest='threshold_rule/period',
-           help='Length of each period (seconds) to evaluate over')
+           help='Length of each period (seconds) to evaluate over.')
 @utils.arg('--evaluation-periods', type=int, metavar='<COUNT>',
            dest='threshold_rule/evaluation_periods',
-           help='Number of periods to evaluate over')
+           help='Number of periods to evaluate over.')
 @utils.arg('--statistic', metavar='<STATISTIC>',
            dest='threshold_rule/statistic',
-           help='Statistic to evaluate, one of: ' + str(STATISTICS))
+           help='Statistic to evaluate, one of: ' + str(STATISTICS) +
+           '.')
 @utils.arg('--comparison-operator', metavar='<OPERATOR>',
            dest='threshold_rule/comparison_operator',
-           help='Operator to compare with, one of: ' + str(ALARM_OPERATORS))
+           help='Operator to compare with, one of: ' + str(ALARM_OPERATORS) +
+           '.')
 @utils.arg('--threshold', type=float, metavar='<THRESHOLD>',
            dest='threshold_rule/threshold',
-           help='Threshold to evaluate against')
+           help='Threshold to evaluate against.')
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
-                'but if supplied must be string, integer, float, or boolean')
+                'but if supplied must be string, integer, float, or boolean.')
 @utils.arg('--repeat-actions', dest='repeat_actions',
            metavar='{True|False}', type=strutils.bool_from_string,
            help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state'))
+                 'while alarm remains in target state.'))
 def do_alarm_threshold_update(cc, args={}):
     '''Update an existing alarm based on computed statistics.'''
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
     fields = utils.key_with_slash_to_nested_dict(fields)
     fields.pop('alarm_id')
     fields['type'] = 'threshold'
@@ -468,20 +570,25 @@ def do_alarm_threshold_update(cc, args={}):
 @utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
            help='ID of the alarm to update.')
 @common_alarm_arguments()
+@utils.arg('--remove-time-constraint', action='append',
+           metavar='<Constraint names>',
+           dest='remove_time_constraints',
+           help='Name or list of names of the time constraints to remove.')
 @utils.arg('--alarm_ids', action='append', metavar='<ALARM IDS>',
            dest='combination_rule/alarm_ids',
-           help='List of alarm id')
+           help='List of alarm id.')
 @utils.arg('--operator', metavar='<OPERATOR>',
            dest='combination_rule/operator',
            help='Operator to compare with, one of: ' + str(
-               ALARM_COMBINATION_OPERATORS))
+               ALARM_COMBINATION_OPERATORS) + '.')
 @utils.arg('--repeat-actions', dest='repeat_actions',
            metavar='{True|False}', type=strutils.bool_from_string,
            help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state'))
+                 'while alarm remains in target state.'))
 def do_alarm_combination_update(cc, args={}):
     '''Update an existing alarm based on state of other alarms.'''
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
     fields = utils.key_with_slash_to_nested_dict(fields)
     fields.pop('alarm_id')
     fields['type'] = 'combination'
@@ -505,7 +612,8 @@ def do_alarm_delete(cc, args={}):
 @utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
            help='ID of the alarm state to set.')
 @utils.arg('--state', metavar='<STATE>', required=True,
-           help='State of the alarm, one of: ' + str(ALARM_STATES))
+           help='State of the alarm, one of: ' + str(ALARM_STATES) +
+           '.')
 def do_alarm_state_set(cc, args={}):
     '''Set the state of an alarm.'''
     try:
@@ -530,7 +638,7 @@ def do_alarm_state_get(cc, args={}):
            help='ID of the alarm for which history is shown.')
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
-                'but if supplied must be string, integer, float, or boolean')
+                'but if supplied must be string, integer, float, or boolean.')
 def do_alarm_history(cc, args={}):
     '''Display the change history of an alarm.'''
     kwargs = dict(alarm_id=args.alarm_id,
@@ -609,7 +717,7 @@ def do_event_type_list(cc, args={}):
 
 
 @utils.arg('-e', '--event_type', metavar='<EVENT_TYPE>',
-           help='Type of the event for which traits will be shown',
+           help='Type of the event for which traits will be shown.',
            required=True)
 def do_trait_description_list(cc, args={}):
     '''List trait info for an event type.'''
@@ -620,10 +728,10 @@ def do_trait_description_list(cc, args={}):
 
 
 @utils.arg('-e', '--event_type', metavar='<EVENT_TYPE>',
-           help='Type of the event for which traits will listed',
+           help='Type of the event for which traits will listed.',
            required=True)
 @utils.arg('-t', '--trait_name', metavar='<TRAIT_NAME>',
-           help='The name of the trait to list',
+           help='The name of the trait to list.',
            required=True)
 def do_trait_list(cc, args={}):
     '''List trait all traits with name <trait_name> for Event Type
@@ -633,3 +741,84 @@ def do_trait_list(cc, args={}):
     field_labels = ['Trait Name', 'Value', 'Data Type']
     fields = ['name', 'value', 'type']
     utils.print_list(traits, fields, field_labels)
+
+
+@utils.arg('-f', '--filter', metavar='<FILTER>',
+           help=('{complex_op: [{simple_op: {field_name: value}}]} '
+                 'The complex_op is one of: ' + str(COMPLEX_OPERATORS) + ', '
+                 'simple_op is one of: ' + str(SIMPLE_OPERATORS) + '.'))
+@utils.arg('-o', '--orderby', metavar='<ORDERBY>',
+           help=('[{field_name: direction}, {field_name: direction}] '
+                 'The direction is one of: ' + str(ORDER_DIRECTIONS) + '.'))
+@utils.arg('-l', '--limit', metavar='<LIMIT>',
+           help='Maximum number of samples to return.')
+def do_query_samples(cc, args):
+    '''Query samples.'''
+    fields = {'filter': args.filter,
+              'orderby': args.orderby,
+              'limit': args.limit}
+    try:
+        samples = cc.query_samples.query(**fields)
+    except exc.HTTPNotFound:
+        raise exc.CommandError('Samples not found')
+    else:
+        field_labels = ['Resource ID', 'Meter', 'Type', 'Volume', 'Unit',
+                        'Timestamp']
+        fields = ['resource_id', 'meter', 'type',
+                  'volume', 'unit', 'timestamp']
+        utils.print_list(samples, fields, field_labels,
+                         sortby=None)
+
+
+@utils.arg('-f', '--filter', metavar='<FILTER>',
+           help=('{complex_op: [{simple_op: {field_name: value}}]} '
+                 'The complex_op is one of: ' + str(COMPLEX_OPERATORS) + ', '
+                 'simple_op is one of: ' + str(SIMPLE_OPERATORS) + '.'))
+@utils.arg('-o', '--orderby', metavar='<ORDERBY>',
+           help=('[{field_name: direction}, {field_name: direction}] '
+                 'The direction is one of: ' + str(ORDER_DIRECTIONS) + '.'))
+@utils.arg('-l', '--limit', metavar='<LIMIT>',
+           help='Maximum number of alarms to return.')
+def do_query_alarms(cc, args):
+    '''Query Alarms.'''
+    fields = {'filter': args.filter,
+              'orderby': args.orderby,
+              'limit': args.limit}
+    try:
+        alarms = cc.query_alarms.query(**fields)
+    except exc.HTTPNotFound:
+        raise exc.CommandError('Alarms not found')
+    else:
+        field_labels = ['Alarm ID', 'Name', 'State', 'Enabled', 'Continuous',
+                        'Alarm condition']
+        fields = ['alarm_id', 'name', 'state', 'enabled', 'repeat_actions',
+                  'rule']
+        utils.print_list(alarms, fields, field_labels,
+                         formatters={'rule': alarm_rule_formatter},
+                         sortby=None)
+
+
+@utils.arg('-f', '--filter', metavar='<FILTER>',
+           help=('{complex_op: [{simple_op: {field_name: value}}]} '
+                 'The complex_op is one of: ' + str(COMPLEX_OPERATORS) + ', '
+                 'simple_op is one of: ' + str(SIMPLE_OPERATORS) + '.'))
+@utils.arg('-o', '--orderby', metavar='<ORDERBY>',
+           help=('[{field_name: direction}, {field_name: direction}] '
+                 'The direction is one of: ' + str(ORDER_DIRECTIONS) + '.'))
+@utils.arg('-l', '--limit', metavar='<LIMIT>',
+           help='Maximum number of alarm history items to return.')
+def do_query_alarm_history(cc, args):
+    '''Query Alarm History.'''
+    fields = {'filter': args.filter,
+              'orderby': args.orderby,
+              'limit': args.limit}
+    try:
+        alarm_history = cc.query_alarm_history.query(**fields)
+    except exc.HTTPNotFound:
+        raise exc.CommandError('Alarm history not found')
+    else:
+        field_labels = ['Alarm ID', 'Event ID', 'Type', 'Detail', 'Timestamp']
+        fields = ['alarm_id', 'event_id', 'type', 'detail', 'timestamp']
+        utils.print_list(alarm_history, fields, field_labels,
+                         formatters={'rule': alarm_change_detail_formatter},
+                         sortby=None)

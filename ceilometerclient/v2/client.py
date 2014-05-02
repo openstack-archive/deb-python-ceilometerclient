@@ -1,5 +1,7 @@
-# Copyright 2012 OpenStack Foundation
-# All Rights Reserved.
+# Copyright Ericsson AB 2014. All rights reserved
+#
+# Authors: Balazs Gibizer <balazs.gibizer@ericsson.com>
+#          Ildiko Vancsa <ildiko.vancsa@ericsson.com>
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -18,6 +20,7 @@ from ceilometerclient.v2 import alarms
 from ceilometerclient.v2 import event_types
 from ceilometerclient.v2 import events
 from ceilometerclient.v2 import meters
+from ceilometerclient.v2 import query
 from ceilometerclient.v2 import resources
 from ceilometerclient.v2 import samples
 from ceilometerclient.v2 import statistics
@@ -36,7 +39,7 @@ class Client(object):
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize a new client for the Ceilometer v1 API."""
+        """Initialize a new client for the Ceilometer v2 API."""
         self.http_client = http.HTTPClient(*args, **kwargs)
         self.meters = meters.MeterManager(self.http_client)
         self.samples = samples.SampleManager(self.http_client)
@@ -48,3 +51,9 @@ class Client(object):
         self.traits = traits.TraitManager(self.http_client)
         self.trait_info = trait_descriptions.\
             TraitDescriptionManager(self.http_client)
+        self.query_samples = query.QuerySamplesManager(
+            self.http_client)
+        self.query_alarms = query.QueryAlarmsManager(
+            self.http_client)
+        self.query_alarm_history = query.QueryAlarmHistoryManager(
+            self.http_client)
