@@ -1,8 +1,5 @@
-# -*- encoding: utf-8 -*-
 #
-# Copyright © 2013 Red Hat, Inc
-#
-# Author:  Eoghan Glynn <eglynn@redhat.com>
+# Copyright 2013 Red Hat, Inc
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -20,6 +17,7 @@ import warnings
 
 from ceilometerclient.common import base
 from ceilometerclient.common import utils
+from ceilometerclient import exc
 from ceilometerclient.v2 import options
 
 
@@ -28,13 +26,12 @@ UPDATABLE_ATTRIBUTES = [
     'description',
     'type',
     'state',
+    'severity',
     'enabled',
     'alarm_actions',
     'ok_actions',
     'insufficient_data_actions',
     'repeat_actions',
-    'threshold_rule',
-    'combination_rule',
 ]
 CREATION_ATTRIBUTES = UPDATABLE_ATTRIBUTES + ['project_id', 'user_id',
                                               'time_constraints']
@@ -49,7 +46,16 @@ class Alarm(base.Resource):
         # that look like the Alarm storage object
         if k == 'rule':
             k = '%s_rule' % self.type
+        if k == 'id':
+            return self.alarm_id
         return super(Alarm, self).__getattr__(k)
+
+    def delete(self):
+        return self.manager.delete(self.alarm_id)
+
+    def get_state(self):
+        state = self.manager.get_state(self.alarm_id)
+        return state.get('alarm')
 
 
 class AlarmChange(base.Resource):
@@ -74,6 +80,14 @@ class AlarmManager(base.Manager):
         try:
             return self._list(self._path(alarm_id), expect_single=True)[0]
         except IndexError:
+            return None
+
+        except exc.HTTPNotFound:
+            # When we try to get deleted alarm HTTPNotFound occurs
+            # or when alarm doesn't exists this exception don't must
+            # go deeper because cleanUp() (method which remove all
+            # created things like instance, alarm, etc.) at scenario
+            # tests doesn't know how to process it
             return None
 
     @classmethod
@@ -135,16 +149,21 @@ class AlarmManager(base.Manager):
     def create(self, **kwargs):
         self._compat_legacy_alarm_kwargs(kwargs, create=True)
         new = dict((key, value) for (key, value) in kwargs.items()
-                   if key in CREATION_ATTRIBUTES)
+                   if (key in CREATION_ATTRIBUTES
+                       or key.endswith('_rule')))
         return self._create(self._path(), new)
 
     def update(self, alarm_id, **kwargs):
         self._compat_legacy_alarm_kwargs(kwargs)
-        updated = self.get(alarm_id).to_dict()
+        alarm = self.get(alarm_id)
+        if alarm is None:
+            raise exc.CommandError('Alarm not found: %s' % alarm_id)
+        updated = alarm.to_dict()
         updated['time_constraints'] = self._merge_time_constraints(
             updated.get('time_constraints', []), kwargs)
         kwargs = dict((k, v) for k, v in kwargs.items()
-                      if k in updated and k in UPDATABLE_ATTRIBUTES)
+                      if k in updated and (k in UPDATABLE_ATTRIBUTES
+                                           or k.endswith('_rule')))
         utils.merge_nested_dict(updated, kwargs, depth=1)
         return self._update(self._path(alarm_id), updated)
 
@@ -152,14 +171,12 @@ class AlarmManager(base.Manager):
         return self._delete(self._path(alarm_id))
 
     def set_state(self, alarm_id, state):
-        resp, body = self.api.json_request('PUT',
-                                           "%s/state" % self._path(alarm_id),
-                                           body=state)
+        body = self.api.put("%s/state" % self._path(alarm_id),
+                            json=state).json()
         return body
 
     def get_state(self, alarm_id):
-        resp, body = self.api.json_request('GET',
-                                           "%s/state" % self._path(alarm_id))
+        body = self.api.get("%s/state" % self._path(alarm_id)).json()
         return body
 
     def get_history(self, alarm_id, q=None):

@@ -1,6 +1,5 @@
-# -*- encoding: utf-8 -*-
 #
-# Copyright © 2013 Red Hat, Inc
+# Copyright 2013 Red Hat, Inc
 # Copyright Ericsson AB 2014. All rights reserved
 #
 # Authors: Angus Salkeld <asalkeld@redhat.com>
@@ -19,17 +18,20 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import argparse
 import functools
 import json
+
+from oslo.utils import strutils
 import six
 
 from ceilometerclient.common import utils
 from ceilometerclient import exc
-from ceilometerclient.openstack.common import strutils
 from ceilometerclient.v2 import options
 
 
-ALARM_STATES = ['ok', 'alarm', 'insufficient_data']
+ALARM_STATES = ['ok', 'alarm', 'insufficient data']
+ALARM_SEVERITY = ['low', 'moderate', 'critical']
 ALARM_OPERATORS = ['lt', 'le', 'eq', 'ne', 'ge', 'gt']
 ALARM_COMBINATION_OPERATORS = ['and', 'or']
 STATISTICS = ['max', 'min', 'avg', 'sum', 'count']
@@ -48,21 +50,38 @@ COMPLEX_OPERATORS = ['and', 'or']
 SIMPLE_OPERATORS = ["=", "!=", "<", "<=", '>', '>=']
 
 
+class NotEmptyAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        values = values or getattr(namespace, self.dest)
+        if not values or values.isspace():
+            raise exc.CommandError('%s should not be empty' % self.dest)
+        setattr(namespace, self.dest, values)
+
+
+def obsoleted_by(new_dest):
+    class ObsoletedByAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            old_dest = option_string or self.dest
+            print('%s is obsolete! See help for more details.' % old_dest)
+            setattr(namespace, new_dest, values)
+    return ObsoletedByAction
+
+
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
 @utils.arg('-m', '--meter', metavar='<NAME>', required=True,
-           help='Name of meter to show samples for.')
+           action=NotEmptyAction, help='Name of meter to list statistics for.')
 @utils.arg('-p', '--period', metavar='<PERIOD>',
            help='Period in seconds over which to group samples.')
 @utils.arg('-g', '--groupby', metavar='<FIELD>', action='append',
            help='Field for group by.')
 @utils.arg('-a', '--aggregate', metavar='<FUNC>[<-<PARAM>]', action='append',
            default=[], help=('Function for data aggregation. '
-                 'Available aggregates are: '
-                 '%s.' % ", ".join(AGGREGATES.keys())))
+                             'Available aggregates are: '
+                             '%s.' % ", ".join(AGGREGATES.keys())))
 def do_statistics(cc, args):
-    '''List the statistics for a meter.'''
+    """List the statistics for a meter."""
     aggregates = []
     for a in args.aggregate:
         aggregates.append(dict(zip(('func', 'param'), a.split("<-"))))
@@ -105,12 +124,19 @@ def do_statistics(cc, args):
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
-@utils.arg('-m', '--meter', metavar='<NAME>', required=True,
-           help='Name of meter to show samples for.')
+@utils.arg('-m', '--meter', metavar='<NAME>',
+           action=NotEmptyAction, help='Name of meter to show samples for.')
 @utils.arg('-l', '--limit', metavar='<NUMBER>',
            help='Maximum number of samples to return.')
 def do_sample_list(cc, args):
-    '''List the samples for a meter.'''
+    """List the samples (return OldSample objects if -m/--meter is set)."""
+    if not args.meter:
+        return _do_sample_list(cc, args)
+    else:
+        return _do_old_sample_list(cc, args)
+
+
+def _do_old_sample_list(cc, args):
     fields = {'meter_name': args.meter,
               'q': options.cli_to_array(args.query),
               'limit': args.limit}
@@ -123,8 +149,36 @@ def do_sample_list(cc, args):
                         'Timestamp']
         fields = ['resource_id', 'counter_name', 'counter_type',
                   'counter_volume', 'counter_unit', 'timestamp']
-        utils.print_list(samples, fields, field_labels,
-                         sortby=None)
+        utils.print_list(samples, fields, field_labels, sortby=None)
+
+
+def _do_sample_list(cc, args):
+    fields = {
+        'q': options.cli_to_array(args.query),
+        'limit': args.limit
+    }
+    samples = cc.new_samples.list(**fields)
+    field_labels = ['ID', 'Resource ID', 'Name', 'Type', 'Volume', 'Unit',
+                    'Timestamp']
+    fields = ['id', 'resource_id', 'meter', 'type', 'volume', 'unit',
+              'timestamp']
+    utils.print_list(samples, fields, field_labels, sortby=None)
+
+
+@utils.arg('sample_id', metavar='<SAMPLE_ID>', action=NotEmptyAction,
+           help='ID (aka message ID) of the sample to show.')
+def do_sample_show(cc, args):
+    '''Show an sample.'''
+    sample = cc.new_samples.get(args.sample_id)
+
+    if sample is None:
+        raise exc.CommandError('Sample not found: %s' % args.sample_id)
+
+    fields = ['id', 'meter', 'volume', 'type', 'unit', 'source',
+              'resource_id', 'user_id', 'project_id',
+              'timestamp', 'recorded_at', 'metadata']
+    data = dict((f, getattr(sample, f, '')) for f in fields)
+    utils.print_dict(data, wrap=72)
 
 
 @utils.arg('--project-id', metavar='<PROJECT_ID>',
@@ -136,7 +190,7 @@ def do_sample_list(cc, args):
 @utils.arg('-r', '--resource-id', metavar='<RESOURCE_ID>', required=True,
            help='ID of the resource.')
 @utils.arg('-m', '--meter-name', metavar='<METER_NAME>', required=True,
-           help='The meter name.')
+           action=NotEmptyAction, help='The meter name.')
 @utils.arg('--meter-type', metavar='<METER_TYPE>', required=True,
            help='The meter type.')
 @utils.arg('--meter-unit', metavar='<METER_UNIT>', required=True,
@@ -144,11 +198,12 @@ def do_sample_list(cc, args):
 @utils.arg('--sample-volume', metavar='<SAMPLE_VOLUME>', required=True,
            help='The sample volume.')
 @utils.arg('--resource-metadata', metavar='<RESOURCE_METADATA>',
-           help='Resource metadata.')
+           help='Resource metadata. Provided value should be a set of '
+                'key-value pairs e.g. {"key":"value"}.')
 @utils.arg('--timestamp', metavar='<TIMESTAMP>',
            help='The sample timestamp.')
 def do_sample_create(cc, args={}):
-    '''Create a sample.'''
+    """Create a sample."""
     arg_to_field_mapping = {'meter_name': 'counter_name',
                             'meter_unit': 'counter_unit',
                             'meter_type': 'counter_type',
@@ -175,7 +230,7 @@ def do_sample_create(cc, args={}):
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
 def do_meter_list(cc, args={}):
-    '''List the user's meters.'''
+    """List the user's meters."""
     meters = cc.meters.list(q=options.cli_to_array(args.query))
     field_labels = ['Name', 'Type', 'Unit', 'Resource ID', 'User ID',
                     'Project ID']
@@ -183,6 +238,20 @@ def do_meter_list(cc, args={}):
               'project_id']
     utils.print_list(meters, fields, field_labels,
                      sortby=0)
+
+
+def _display_alarm_list(alarms, sortby=None):
+    # omit action initially to keep output width sane
+    # (can switch over to vertical formatting when available from CLIFF)
+    field_labels = ['Alarm ID', 'Name', 'State', 'Severity', 'Enabled',
+                    'Continuous', 'Alarm condition', 'Time constraints']
+    fields = ['alarm_id', 'name', 'state', 'severity', 'enabled',
+              'repeat_actions', 'rule', 'time_constraints']
+    utils.print_list(
+        alarms, fields, field_labels,
+        formatters={'rule': alarm_rule_formatter,
+                    'time_constraints': time_constraints_formatter_brief},
+        sortby=sortby)
 
 
 def _display_rule(type, rule):
@@ -204,14 +273,14 @@ def _display_rule(type, rule):
     else:
         # just dump all
         return "\n".join(["%s: %s" % (f, v)
-                          for f, v in rule.iteritems()])
+                          for f, v in six.iteritems(rule)])
 
 
 def alarm_rule_formatter(alarm):
     return _display_rule(alarm.type, alarm.rule)
 
 
-def _display_time_constraints(time_constraints):
+def _display_time_constraints_brief(time_constraints):
     if time_constraints:
         return ', '.join('%(name)s at %(start)s %(timezone)s for %(duration)ss'
                          % {
@@ -225,8 +294,10 @@ def _display_time_constraints(time_constraints):
         return 'None'
 
 
-def time_constraints_formatter(alarm):
-    return _display_time_constraints(alarm.time_constraints)
+def time_constraints_formatter_brief(alarm):
+    return _display_time_constraints_brief(getattr(alarm,
+                                                   'time_constraints',
+                                                   None))
 
 
 def _infer_type(detail):
@@ -254,7 +325,7 @@ def alarm_change_detail_formatter(change):
                 fields.append('%s: %s' % (k, detail[k]))
         if 'time_constraints' in detail:
             fields.append('time_constraints: %s' %
-                          _display_time_constraints(
+                          _display_time_constraints_brief(
                               detail['time_constraints']))
     elif change.type == 'rule change':
         for k, v in six.iteritems(detail):
@@ -270,18 +341,9 @@ def alarm_change_detail_formatter(change):
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
 def do_alarm_list(cc, args={}):
-    '''List the user's alarms.'''
+    """List the user's alarms."""
     alarms = cc.alarms.list(q=options.cli_to_array(args.query))
-    # omit action initially to keep output width sane
-    # (can switch over to vertical formatting when available from CLIFF)
-    field_labels = ['Alarm ID', 'Name', 'State', 'Enabled', 'Continuous',
-                    'Alarm condition', 'Time constraints']
-    fields = ['alarm_id', 'name', 'state', 'enabled', 'repeat_actions',
-              'rule', 'time_constraints']
-    utils.print_list(
-        alarms, fields, field_labels,
-        formatters={'rule': alarm_rule_formatter,
-                    'time_constraints': time_constraints_formatter}, sortby=0)
+    _display_alarm_list(alarms, sortby=0)
 
 
 def alarm_query_formater(alarm):
@@ -292,7 +354,7 @@ def alarm_query_formater(alarm):
     return r' AND\n'.join(qs)
 
 
-def alarm_time_constraints_formatter(alarm):
+def time_constraints_formatter_full(alarm):
     time_constraints = []
     for tc in alarm.time_constraints:
         lines = []
@@ -305,25 +367,27 @@ def alarm_time_constraints_formatter(alarm):
 
 def _display_alarm(alarm):
     fields = ['name', 'description', 'type',
-              'state', 'enabled', 'alarm_id', 'user_id', 'project_id',
-              'alarm_actions', 'ok_actions', 'insufficient_data_actions',
-              'repeat_actions']
+              'state', 'severity', 'enabled', 'alarm_id', 'user_id',
+              'project_id', 'alarm_actions', 'ok_actions',
+              'insufficient_data_actions', 'repeat_actions']
     data = dict([(f, getattr(alarm, f, '')) for f in fields])
     data.update(alarm.rule)
     if alarm.type == 'threshold':
         data['query'] = alarm_query_formater(alarm)
     if alarm.time_constraints:
-        data['time_constraints'] = alarm_time_constraints_formatter(alarm)
+        data['time_constraints'] = time_constraints_formatter_full(alarm)
     utils.print_dict(data, wrap=72)
 
 
-@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
-           help='ID of the alarm to show.')
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?',
+           action=NotEmptyAction, help='ID of the alarm to show.')
 def do_alarm_show(cc, args={}):
-    '''Show an alarm.'''
-    try:
-        alarm = cc.alarms.get(args.alarm_id)
-    except exc.HTTPNotFound:
+    """Show an alarm."""
+    alarm = cc.alarms.get(args.alarm_id)
+    if alarm is None:
         raise exc.CommandError('Alarm not found: %s' % args.alarm_id)
     else:
         _display_alarm(alarm)
@@ -343,6 +407,9 @@ def common_alarm_arguments(create=False):
                    help='Free text description of the alarm.')
         @utils.arg('--state', metavar='<STATE>',
                    help='State of the alarm, one of: ' + str(ALARM_STATES))
+        @utils.arg('--severity', metavar='<SEVERITY>',
+                   help='Severity of the alarm, one of: '
+                        + str(ALARM_SEVERITY))
         @utils.arg('--enabled', type=strutils.bool_from_string,
                    metavar='{True|False}',
                    help='True if alarm evaluation/actioning is enabled.')
@@ -358,19 +425,86 @@ def common_alarm_arguments(create=False):
                    dest='insufficient_data_actions',
                    metavar='<Webhook URL>', action='append', default=None,
                    help=('URL to invoke when state transitions to '
-                         'insufficient_data. May be used multiple times.'))
+                         'insufficient data. May be used multiple times.'))
         @utils.arg('--time-constraint', dest='time_constraints',
                    metavar='<Time Constraint>', action='append',
                    default=None,
                    help=('Only evaluate the alarm if the time at evaluation '
                          'is within this time constraint. Start point(s) of '
-                         'the constraint are specified with a cron expression '
+                         'the constraint are specified with a cron expression'
                          ', whereas its duration is given in seconds. '
                          'Can be specified multiple times for multiple '
                          'time constraints, format is: '
                          'name=<CONSTRAINT_NAME>;start=<CRON>;'
                          'duration=<SECONDS>;[description=<DESCRIPTION>;'
                          '[timezone=<IANA Timezone>]]'))
+        @functools.wraps(func)
+        def _wrapped(*args, **kwargs):
+            return func(*args, **kwargs)
+        return _wrapped
+    return _wrapper
+
+
+def common_alarm_gnocchi_arguments(rule_namespace, create=False):
+    def _wrapper(func):
+        @utils.arg('--granularity', type=int, metavar='<GRANULARITY>',
+                   dest=rule_namespace + '/granularity',
+                   help='Length of each period (seconds) to evaluate over.')
+        @utils.arg('--evaluation-periods', type=int, metavar='<COUNT>',
+                   dest=rule_namespace + '/evaluation_periods',
+                   help='Number of periods to evaluate over.')
+        @utils.arg('--aggregation-method', metavar='<AGGREATION>',
+                   dest=rule_namespace + '/aggregation_method',
+                   help=('Aggregation method to use, one of: ' +
+                         str(STATISTICS) + '.'))
+        @utils.arg('--comparison-operator', metavar='<OPERATOR>',
+                   dest=rule_namespace + '/comparison_operator',
+                   help=('Operator to compare with, one of: ' +
+                         str(ALARM_OPERATORS) + '.'))
+        @utils.arg('--threshold', type=float, metavar='<THRESHOLD>',
+                   dest=rule_namespace + '/threshold',
+                   required=create,
+                   help='Threshold to evaluate against.')
+        @utils.arg('--repeat-actions', dest='repeat_actions',
+                   metavar='{True|False}', type=strutils.bool_from_string,
+                   default=False,
+                   help=('True if actions should be repeatedly notified '
+                         'while alarm remains in target state.'))
+        @functools.wraps(func)
+        def _wrapped(*args, **kwargs):
+            return func(*args, **kwargs)
+        return _wrapped
+    return _wrapper
+
+
+def common_alarm_gnocchi_metrics_arguments(create=False):
+    def _wrapper(func):
+        @utils.arg('-m', '--metrics', metavar='<METRICS>',
+                   dest='gnocchi_metrics_threshold_rule/meter_name',
+                   action='append', required=create,
+                   help='Metric to evaluate against.')
+        @functools.wraps(func)
+        def _wrapped(*args, **kwargs):
+            return func(*args, **kwargs)
+        return _wrapped
+    return _wrapper
+
+
+def common_alarm_gnocchi_resources_arguments(create=False):
+    def _wrapper(func):
+        @utils.arg('-m', '--metric', metavar='<METRIC>',
+                   dest='gnocchi_resources_threshold_rule/metric',
+                   required=create,
+                   help='Metric to evaluate against.')
+        @utils.arg('--resource-type', metavar='<RESOURCE_TYPE>',
+                   dest='gnocchi_resources_threshold_rule/resource_type',
+                   required=create,
+                   help='Resource_type to evaluate against.')
+        @utils.arg('--resource-constraint', metavar='<RESOURCE_CONSTRAINT>',
+                   dest='gnocchi_resources_threshold_rule/resource_constraint',
+                   required=create,
+                   help=('Resources to evaluate against or a expression '
+                         'to select multiple resources.'))
         @functools.wraps(func)
         def _wrapped(*args, **kwargs):
             return func(*args, **kwargs)
@@ -402,10 +536,37 @@ def common_alarm_arguments(create=False):
            help=('True if actions should be repeatedly notified '
                  'while alarm remains in target state.'))
 def do_alarm_create(cc, args={}):
-    '''Create a new alarm (Deprecated). Use alarm-threshold-create instead.'''
+    """Create a new alarm (Deprecated). Use alarm-threshold-create instead."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
     fields = utils.args_array_to_list_of_dicts(fields, "time_constraints")
     fields = utils.args_array_to_dict(fields, "matching_metadata")
+    alarm = cc.alarms.create(**fields)
+    _display_alarm(alarm)
+
+
+@common_alarm_arguments(create=True)
+@common_alarm_gnocchi_arguments('gnocchi_resources_threshold_rule',
+                                create=True)
+@common_alarm_gnocchi_resources_arguments(create=True)
+def do_alarm_gnocchi_resources_threshold_create(cc, args={}):
+    """Create a new alarm based on computed statistics."""
+    fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
+    fields = utils.key_with_slash_to_nested_dict(fields)
+    fields['type'] = 'gnocchi_resources_threshold'
+    alarm = cc.alarms.create(**fields)
+    _display_alarm(alarm)
+
+
+@common_alarm_arguments(create=True)
+@common_alarm_gnocchi_arguments('gnocchi_metrics_threshold_rule', create=True)
+@common_alarm_gnocchi_metrics_arguments(create=True)
+def do_alarm_gnocchi_metrics_threshold_create(cc, args={}):
+    """Create a new alarm based on computed statistics."""
+    fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
+    fields = utils.key_with_slash_to_nested_dict(fields)
+    fields['type'] = 'gnocchi_metrics_threshold'
     alarm = cc.alarms.create(**fields)
     _display_alarm(alarm)
 
@@ -440,7 +601,7 @@ def do_alarm_create(cc, args={}):
            help=('True if actions should be repeatedly notified '
                  'while alarm remains in target state.'))
 def do_alarm_threshold_create(cc, args={}):
-    '''Create a new alarm based on computed statistics.'''
+    """Create a new alarm based on computed statistics."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
     fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
     fields = utils.key_with_slash_to_nested_dict(fields)
@@ -455,7 +616,7 @@ def do_alarm_threshold_create(cc, args={}):
 @common_alarm_arguments(create=True)
 @utils.arg('--alarm_ids', action='append', metavar='<ALARM IDS>',
            required=True, dest='combination_rule/alarm_ids',
-           help='List of alarm ids.')
+           help='List of alarm IDs.')
 @utils.arg('--operator', metavar='<OPERATOR>',
            dest='combination_rule/operator',
            help='Operator to compare with, one of: ' + str(
@@ -466,7 +627,7 @@ def do_alarm_threshold_create(cc, args={}):
            help=('True if actions should be repeatedly notified '
                  'while alarm remains in target state.'))
 def do_alarm_combination_create(cc, args={}):
-    '''Create a new alarm based on state of other alarms.'''
+    """Create a new alarm based on state of other alarms."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
     fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
     fields = utils.key_with_slash_to_nested_dict(fields)
@@ -475,8 +636,11 @@ def do_alarm_combination_create(cc, args={}):
     _display_alarm(alarm)
 
 
-@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
-           help='ID of the alarm to update.')
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?',
+           action=NotEmptyAction, help='ID of the alarm to update.')
 @common_alarm_arguments()
 @utils.arg('--remove-time-constraint', action='append',
            metavar='<Constraint names>',
@@ -504,7 +668,7 @@ def do_alarm_combination_create(cc, args={}):
            help=('True if actions should be repeatedly notified '
                  'while alarm remains in target state.'))
 def do_alarm_update(cc, args={}):
-    '''Update an existing alarm (Deprecated).'''
+    """Update an existing alarm (Deprecated)."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
     fields = utils.args_array_to_list_of_dicts(fields, "time_constraints")
     fields = utils.args_array_to_dict(fields, "matching_metadata")
@@ -516,8 +680,11 @@ def do_alarm_update(cc, args={}):
     _display_alarm(alarm)
 
 
-@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
-           help='ID of the alarm to update.')
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?',
+           action=NotEmptyAction, help='ID of the alarm to update.')
 @common_alarm_arguments()
 @utils.arg('--remove-time-constraint', action='append',
            metavar='<Constraint names>',
@@ -544,6 +711,7 @@ def do_alarm_update(cc, args={}):
            dest='threshold_rule/threshold',
            help='Threshold to evaluate against.')
 @utils.arg('-q', '--query', metavar='<QUERY>',
+           dest='threshold_rule/query',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
 @utils.arg('--repeat-actions', dest='repeat_actions',
@@ -551,7 +719,7 @@ def do_alarm_update(cc, args={}):
            help=('True if actions should be repeatedly notified '
                  'while alarm remains in target state.'))
 def do_alarm_threshold_update(cc, args={}):
-    '''Update an existing alarm based on computed statistics.'''
+    """Update an existing alarm based on computed statistics."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
     fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
     fields = utils.key_with_slash_to_nested_dict(fields)
@@ -567,8 +735,63 @@ def do_alarm_threshold_update(cc, args={}):
     _display_alarm(alarm)
 
 
-@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
-           help='ID of the alarm to update.')
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?',
+           action=NotEmptyAction, help='ID of the alarm to update.')
+@common_alarm_arguments()
+@common_alarm_gnocchi_arguments('gnocchi_resources_threshold')
+@common_alarm_gnocchi_resources_arguments()
+@utils.arg('--remove-time-constraint', action='append',
+           metavar='<Constraint names>',
+           dest='remove_time_constraints',
+           help='Name or list of names of the time constraints to remove.')
+def do_alarm_gnocchi_resources_threshold_update(cc, args={}):
+    """Update an existing alarm based on computed statistics."""
+    fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
+    fields = utils.key_with_slash_to_nested_dict(fields)
+    fields.pop('alarm_id')
+    fields['type'] = 'gnocchi_resources_threshold'
+    try:
+        alarm = cc.alarms.update(args.alarm_id, **fields)
+    except exc.HTTPNotFound:
+        raise exc.CommandError('Alarm not found: %s' % args.alarm_id)
+    _display_alarm(alarm)
+
+
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?',
+           action=NotEmptyAction, help='ID of the alarm to update.')
+@common_alarm_arguments()
+@common_alarm_gnocchi_arguments('gnocchi_metrics_threshold')
+@common_alarm_gnocchi_metrics_arguments()
+@utils.arg('--remove-time-constraint', action='append',
+           metavar='<Constraint names>',
+           dest='remove_time_constraints',
+           help='Name or list of names of the time constraints to remove.')
+def do_alarm_gnocchi_metrics_threshold_update(cc, args={}):
+    """Update an existing alarm based on computed statistics."""
+    fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
+    fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
+    fields = utils.key_with_slash_to_nested_dict(fields)
+    fields.pop('alarm_id')
+    fields['type'] = 'gnocchi_metrics_threshold'
+    try:
+        alarm = cc.alarms.update(args.alarm_id, **fields)
+    except exc.HTTPNotFound:
+        raise exc.CommandError('Alarm not found: %s' % args.alarm_id)
+    _display_alarm(alarm)
+
+
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?',
+           action=NotEmptyAction, help='ID of the alarm to update.')
 @common_alarm_arguments()
 @utils.arg('--remove-time-constraint', action='append',
            metavar='<Constraint names>',
@@ -576,7 +799,7 @@ def do_alarm_threshold_update(cc, args={}):
            help='Name or list of names of the time constraints to remove.')
 @utils.arg('--alarm_ids', action='append', metavar='<ALARM IDS>',
            dest='combination_rule/alarm_ids',
-           help='List of alarm id.')
+           help='List of alarm IDs.')
 @utils.arg('--operator', metavar='<OPERATOR>',
            dest='combination_rule/operator',
            help='Operator to compare with, one of: ' + str(
@@ -586,7 +809,7 @@ def do_alarm_threshold_update(cc, args={}):
            help=('True if actions should be repeatedly notified '
                  'while alarm remains in target state.'))
 def do_alarm_combination_update(cc, args={}):
-    '''Update an existing alarm based on state of other alarms.'''
+    """Update an existing alarm based on state of other alarms."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
     fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
     fields = utils.key_with_slash_to_nested_dict(fields)
@@ -599,23 +822,29 @@ def do_alarm_combination_update(cc, args={}):
     _display_alarm(alarm)
 
 
-@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
-           help='ID of the alarm to delete.')
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?',
+           action=NotEmptyAction, help='ID of the alarm to delete.')
 def do_alarm_delete(cc, args={}):
-    '''Delete an alarm.'''
+    """Delete an alarm."""
     try:
         cc.alarms.delete(args.alarm_id)
     except exc.HTTPNotFound:
         raise exc.CommandError('Alarm not found: %s' % args.alarm_id)
 
 
-@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
-           help='ID of the alarm state to set.')
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?',
+           action=NotEmptyAction, help='ID of the alarm state to set.')
 @utils.arg('--state', metavar='<STATE>', required=True,
            help='State of the alarm, one of: ' + str(ALARM_STATES) +
            '.')
 def do_alarm_state_set(cc, args={}):
-    '''Set the state of an alarm.'''
+    """Set the state of an alarm."""
     try:
         state = cc.alarms.set_state(args.alarm_id, args.state)
     except exc.HTTPNotFound:
@@ -623,10 +852,13 @@ def do_alarm_state_set(cc, args={}):
     utils.print_dict({'state': state}, wrap=72)
 
 
-@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
-           help='ID of the alarm state to show.')
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?',
+           action=NotEmptyAction, help='ID of the alarm state to show.')
 def do_alarm_state_get(cc, args={}):
-    '''Get the state of an alarm.'''
+    """Get the state of an alarm."""
     try:
         state = cc.alarms.get_state(args.alarm_id)
     except exc.HTTPNotFound:
@@ -634,13 +866,16 @@ def do_alarm_state_get(cc, args={}):
     utils.print_dict({'state': state}, wrap=72)
 
 
-@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>', required=True,
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?', action=NotEmptyAction,
            help='ID of the alarm for which history is shown.')
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
 def do_alarm_history(cc, args={}):
-    '''Display the change history of an alarm.'''
+    """Display the change history of an alarm."""
     kwargs = dict(alarm_id=args.alarm_id,
                   q=options.cli_to_array(args.query))
     try:
@@ -649,16 +884,20 @@ def do_alarm_history(cc, args={}):
         raise exc.CommandError('Alarm not found: %s' % args.alarm_id)
     field_labels = ['Type', 'Timestamp', 'Detail']
     fields = ['type', 'timestamp', 'detail']
+    # We're using sortby=None as the alarm history returned from the Ceilometer
+    # is already sorted in the "the newer state is the earlier one in the
+    # list". If we'll pass any field as a sortby param, it'll be sorted in the
+    # ASC way by the PrettyTable
     utils.print_list(history, fields, field_labels,
                      formatters={'detail': alarm_change_detail_formatter},
-                     sortby=1)
+                     sortby=None)
 
 
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
 def do_resource_list(cc, args={}):
-    '''List the resources.'''
+    """List the resources."""
     resources = cc.resources.list(q=options.cli_to_array(args.query))
 
     field_labels = ['Resource ID', 'Source', 'User ID', 'Project ID']
@@ -667,10 +906,10 @@ def do_resource_list(cc, args={}):
                      sortby=1)
 
 
-@utils.arg('-r', '--resource_id', metavar='<RESOURCE_ID>', required=True,
-           help='ID of the resource to show.')
+@utils.arg('resource_id', metavar='<RESOURCE_ID>',
+           action=NotEmptyAction, help='ID of the resource to show.')
 def do_resource_show(cc, args={}):
-    '''Show the resource.'''
+    """Show the resource."""
     try:
         resource = cc.resources.get(args.resource_id)
     except exc.HTTPNotFound:
@@ -686,24 +925,28 @@ def do_resource_show(cc, args={}):
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float'
                 'or datetime.')
+@utils.arg('--no-traits', dest='no_traits', action='store_true',
+           help='If specified, traits will not be printed.')
 def do_event_list(cc, args={}):
-    '''List events.'''
+    """List events."""
     events = cc.events.list(q=options.cli_to_array(args.query))
     field_labels = ['Message ID', 'Event Type', 'Generated', 'Traits']
     fields = ['message_id', 'event_type', 'generated', 'traits']
+    if args.no_traits:
+        field_labels.pop()
+        fields.pop()
     utils.print_list(events, fields, field_labels,
                      formatters={
-                     'traits': utils.nested_list_of_dict_formatter('traits',
-                                                                   ['name',
-                                                                    'type',
-                                                                    'value'])})
+                         'traits': utils.nested_list_of_dict_formatter(
+                             'traits', ['name', 'type', 'value']
+                         )},
+                     sortby=None)
 
 
-@utils.arg('-m', '--message_id', metavar='<message_id>',
-           help='The id of the event. Should be a UUID',
-           required=True)
+@utils.arg('message_id', metavar='<message_id>', action=NotEmptyAction,
+           help='The ID of the event. Should be a UUID.')
 def do_event_show(cc, args={}):
-    '''Show a particular event.'''
+    """Show a particular event."""
     event = cc.events.get(args.message_id)
     fields = ['event_type', 'generated', 'traits']
     data = dict([(f, getattr(event, f, '')) for f in fields])
@@ -711,16 +954,16 @@ def do_event_show(cc, args={}):
 
 
 def do_event_type_list(cc, args={}):
-    '''List event types.'''
+    """List event types."""
     event_types = cc.event_types.list()
     utils.print_list(event_types, ['event_type'], ['Event Type'])
 
 
 @utils.arg('-e', '--event_type', metavar='<EVENT_TYPE>',
            help='Type of the event for which traits will be shown.',
-           required=True)
+           required=True, action=NotEmptyAction)
 def do_trait_description_list(cc, args={}):
-    '''List trait info for an event type.'''
+    """List trait info for an event type."""
     trait_descriptions = cc.trait_descriptions.list(args.event_type)
     field_labels = ['Trait Name', 'Data Type']
     fields = ['name', 'type']
@@ -729,14 +972,12 @@ def do_trait_description_list(cc, args={}):
 
 @utils.arg('-e', '--event_type', metavar='<EVENT_TYPE>',
            help='Type of the event for which traits will listed.',
-           required=True)
+           required=True, action=NotEmptyAction)
 @utils.arg('-t', '--trait_name', metavar='<TRAIT_NAME>',
            help='The name of the trait to list.',
-           required=True)
+           required=True, action=NotEmptyAction)
 def do_trait_list(cc, args={}):
-    '''List trait all traits with name <trait_name> for Event Type
-    <event_type>.
-    '''
+    """List all traits with name <trait_name> for Event Type <event_type>."""
     traits = cc.traits.list(args.event_type, args.trait_name)
     field_labels = ['Trait Name', 'Value', 'Data Type']
     fields = ['name', 'value', 'type']
@@ -753,7 +994,7 @@ def do_trait_list(cc, args={}):
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
            help='Maximum number of samples to return.')
 def do_query_samples(cc, args):
-    '''Query samples.'''
+    """Query samples."""
     fields = {'filter': args.filter,
               'orderby': args.orderby,
               'limit': args.limit}
@@ -780,7 +1021,7 @@ def do_query_samples(cc, args):
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
            help='Maximum number of alarms to return.')
 def do_query_alarms(cc, args):
-    '''Query Alarms.'''
+    """Query Alarms."""
     fields = {'filter': args.filter,
               'orderby': args.orderby,
               'limit': args.limit}
@@ -789,13 +1030,7 @@ def do_query_alarms(cc, args):
     except exc.HTTPNotFound:
         raise exc.CommandError('Alarms not found')
     else:
-        field_labels = ['Alarm ID', 'Name', 'State', 'Enabled', 'Continuous',
-                        'Alarm condition']
-        fields = ['alarm_id', 'name', 'state', 'enabled', 'repeat_actions',
-                  'rule']
-        utils.print_list(alarms, fields, field_labels,
-                         formatters={'rule': alarm_rule_formatter},
-                         sortby=None)
+        _display_alarm_list(alarms, sortby=None)
 
 
 @utils.arg('-f', '--filter', metavar='<FILTER>',
@@ -808,7 +1043,7 @@ def do_query_alarms(cc, args):
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
            help='Maximum number of alarm history items to return.')
 def do_query_alarm_history(cc, args):
-    '''Query Alarm History.'''
+    """Query Alarm History."""
     fields = {'filter': args.filter,
               'orderby': args.orderby,
               'limit': args.limit}

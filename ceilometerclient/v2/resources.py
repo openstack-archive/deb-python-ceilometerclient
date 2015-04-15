@@ -1,6 +1,5 @@
-# -*- encoding: utf-8 -*-
 #
-# Copyright © 2013 Red Hat, Inc
+# Copyright 2013 Red Hat, Inc
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -21,6 +20,11 @@ from ceilometerclient.v2 import options
 class Resource(base.Resource):
     def __repr__(self):
         return "<Resource %s>" % self._info
+
+    def __getattr__(self, k):
+        if k == 'id':
+            return self.resource_id
+        return super(Resource, self).__getattr__(k)
 
 
 class ResourceManager(base.Manager):

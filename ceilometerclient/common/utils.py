@@ -14,17 +14,19 @@
 #    under the License.
 
 from __future__ import print_function
-import six
+
 import sys
 import textwrap
 import uuid
 
+from oslo.serialization import jsonutils
+from oslo.utils import encodeutils
+from oslo.utils import importutils
 import prettytable
+import six
 
 from ceilometerclient import exc
 from ceilometerclient.openstack.common import cliutils
-from ceilometerclient.openstack.common import importutils
-from ceilometerclient.openstack.common import strutils
 
 
 # Decorator for cli-args
@@ -83,15 +85,12 @@ def format_nested_list_of_dict(l, column_names):
 
 
 def print_dict(d, dict_property="Property", wrap=0):
-    pt = prettytable.PrettyTable([dict_property, 'Value'],
-                                 caching=False, print_empty=False)
+    pt = prettytable.PrettyTable([dict_property, 'Value'], print_empty=False)
     pt.align = 'l'
     for k, v in sorted(six.iteritems(d)):
         # convert dict to str to check length
         if isinstance(v, dict):
-            v = str(v)
-        if isinstance(v, six.string_types):
-            v = strutils.safe_encode(v)
+            v = jsonutils.dumps(v)
         # if value has a newline, add in multiple rows
         # e.g. fault with stacktrace
         if v and isinstance(v, six.string_types) and r'\n' in v:
@@ -106,7 +105,11 @@ def print_dict(d, dict_property="Property", wrap=0):
             if wrap > 0:
                 v = textwrap.fill(str(v), wrap)
             pt.add_row([k, v])
-    print(pt.get_string())
+    encoded = encodeutils.safe_encode(pt.get_string())
+    # FIXME(gordc): https://bugs.launchpad.net/oslo-incubator/+bug/1370710
+    if six.PY3:
+        encoded = encoded.decode()
+    print(encoded)
 
 
 def find_resource(manager, name_or_id):
@@ -115,20 +118,20 @@ def find_resource(manager, name_or_id):
     try:
         if isinstance(name_or_id, int) or name_or_id.isdigit():
             return manager.get(int(name_or_id))
-    except exc.NotFound:
+    except exc.HTTPNotFound:
         pass
 
     # now try to get entity as uuid
     try:
         uuid.UUID(str(name_or_id))
         return manager.get(name_or_id)
-    except (ValueError, exc.NotFound):
+    except (ValueError, exc.HTTPNotFound):
         pass
 
     # finally try to find entity by name
     try:
         return manager.find(name=name_or_id)
-    except exc.NotFound:
+    except exc.HTTPNotFound:
         msg = "No %s with a name or ID of '%s' exists." % \
               (manager.resource_class.__name__.lower(), name_or_id)
         raise exc.CommandError(msg)
@@ -155,8 +158,7 @@ def args_array_to_dict(kwargs, key_to_convert):
 
 
 def args_array_to_list_of_dicts(kwargs, key_to_convert):
-    """Converts ['a=1;b=2','c=3;d=4'] to [{a:1,b:2},{c:3,d:4}]
-    """
+    """Converts ['a=1;b=2','c=3;d=4'] to [{a:1,b:2},{c:3,d:4}]."""
     values_to_convert = kwargs.get(key_to_convert)
     if values_to_convert:
         try:

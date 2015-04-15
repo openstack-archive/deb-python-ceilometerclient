@@ -26,13 +26,18 @@ CREATION_ATTRIBUTES = ('source',
                        'resource_metadata')
 
 
-class Sample(base.Resource):
+class OldSample(base.Resource):
+    """Represents API v2 OldSample object.
+
+    Model definition:
+    http://docs.openstack.org/developer/ceilometer/webapi/v2.html#OldSample
+    """
     def __repr__(self):
-        return "<Sample %s>" % self._info
+        return "<OldSample %s>" % self._info
 
 
-class SampleManager(base.Manager):
-    resource_class = Sample
+class OldSampleManager(base.Manager):
+    resource_class = OldSample
 
     @staticmethod
     def _path(counter_name=None):
@@ -47,8 +52,31 @@ class SampleManager(base.Manager):
         new = dict((key, value) for (key, value) in kwargs.items()
                    if key in CREATION_ATTRIBUTES)
         url = self._path(counter_name=kwargs['counter_name'])
-        resp, body = self.api.json_request('POST',
-                                           url,
-                                           body=[new])
+        body = self.api.post(url, json=[new]).json()
         if body:
-            return [Sample(self, b) for b in body]
+            return [OldSample(self, b) for b in body]
+
+
+class Sample(base.Resource):
+    """Represents API v2 Sample object.
+
+    Model definition:
+    http://docs.openstack.org/developer/ceilometer/webapi/v2.html#Sample
+    """
+    def __repr__(self):
+        return "<Sample %s>" % self._info
+
+
+class SampleManager(base.Manager):
+    resource_class = Sample
+
+    def list(self, q=None, limit=None):
+        params = ['limit=%s' % str(limit)] if limit else None
+        return self._list(options.build_url("/v2/samples", q, params))
+
+    def get(self, sample_id):
+        path = "/v2/samples/" + sample_id
+        try:
+            return self._list(path, expect_single=True)[0]
+        except IndexError:
+            return None

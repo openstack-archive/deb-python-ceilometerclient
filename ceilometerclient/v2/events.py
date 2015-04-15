@@ -1,4 +1,3 @@
-# -*- encoding: utf-8 -*-
 # Copyright 2014 Hewlett-Packard Development Company, L.P.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -20,6 +19,11 @@ from ceilometerclient.v2 import options
 class Event(base.Resource):
     def __repr__(self):
         return "<Event %s>" % self._info
+
+    def __getattr__(self, k):
+        if k == 'id':
+            return self.message_id
+        return super(Event, self).__getattr__(k)
 
 
 class EventManager(base.Manager):

@@ -13,11 +13,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-
 import itertools
+
 import mock
 import six
-import sys
 
 from ceilometerclient.common import utils
 from ceilometerclient.tests import utils as test_utils
@@ -26,30 +25,56 @@ from ceilometerclient.tests import utils as test_utils
 class UtilsTest(test_utils.BaseTestCase):
 
     def test_prettytable(self):
-        class Struct:
+        class Struct(object):
             def __init__(self, **entries):
                 self.__dict__.update(entries)
 
         # test that the prettytable output is wellformatted (left-aligned)
-        saved_stdout = sys.stdout
-        try:
-            sys.stdout = output_dict = six.StringIO()
+        with mock.patch('sys.stdout', new=six.StringIO()) as stdout:
             utils.print_dict({'K': 'k', 'Key': 'Value'})
-
-        finally:
-            sys.stdout = saved_stdout
-
-        self.assertEqual(output_dict.getvalue(), '''\
+            self.assertEqual('''\
 +----------+-------+
 | Property | Value |
 +----------+-------+
 | K        | k     |
 | Key      | Value |
 +----------+-------+
-''')
+''', stdout.getvalue())
+
+        with mock.patch('sys.stdout', new=six.StringIO()) as stdout:
+            utils.print_dict({'alarm_id': '262567fd-d79a-4bbb-a9d0-59d879b6',
+                              'description': 'test alarm',
+                              'state': 'insufficient data',
+                              'repeat_actions': 'False',
+                              'type': 'threshold',
+                              'threshold': '1.0',
+                              'statistic': 'avg',
+                              'time_constraints': '[{name: c1,'
+                                                  '\\n  description: test,'
+                                                  '\\n  start: 0 18 * * *,'
+                                                  '\\n  duration: 1,'
+                                                  '\\n  timezone: US}]'})
+            self.assertEqual('''\
++------------------+----------------------------------+
+| Property         | Value                            |
++------------------+----------------------------------+
+| alarm_id         | 262567fd-d79a-4bbb-a9d0-59d879b6 |
+| description      | test alarm                       |
+| repeat_actions   | False                            |
+| state            | insufficient data                |
+| statistic        | avg                              |
+| threshold        | 1.0                              |
+| time_constraints | [{name: c1,                      |
+|                  |   description: test,             |
+|                  |   start: 0 18 * * *,             |
+|                  |   duration: 1,                   |
+|                  |   timezone: US}]                 |
+| type             | threshold                        |
++------------------+----------------------------------+
+''', stdout.getvalue())
 
     def test_print_list(self):
-        class Foo:
+        class Foo(object):
             def __init__(self, one, two, three):
                 self.one = one
                 self.two = two
@@ -61,17 +86,13 @@ class UtilsTest(test_utils.BaseTestCase):
             Foo(12, '0', 'Z')]
 
         def do_print_list(sortby):
-            saved_stdout = sys.stdout
-            try:
-                sys.stdout = output = six.StringIO()
+            with mock.patch('sys.stdout', new=six.StringIO()) as stdout:
                 utils.print_list(foo_list,
                                  ['one', 'two', 'three'],
                                  ['1st', '2nd', '3rd'],
                                  {'one': lambda o: o.one * 10},
                                  sortby)
-            finally:
-                sys.stdout = saved_stdout
-            return output.getvalue()
+                return stdout.getvalue()
 
         printed = do_print_list(None)
         self.assertEqual(printed, '''\

@@ -19,6 +19,7 @@ Base utilities to build API operation managers and objects on top of.
 
 import copy
 
+from ceilometerclient import exc
 from ceilometerclient.openstack.common.apiclient import base
 
 # Python 2.4 compat
@@ -30,7 +31,9 @@ except NameError:
 
 
 def getid(obj):
-    """Abstracts the common pattern of allowing both an object or an
+    """Extracts object ID.
+
+    Abstracts the common pattern of allowing both an object or an
     object's ID (UUID) as a parameter when dealing with relationships.
     """
     try:
@@ -40,22 +43,32 @@ def getid(obj):
 
 
 class Manager(object):
-    """Managers interact with a particular type of API
-    (samples, meters, alarms, etc.) and provide CRUD operations for them.
+    """Managers interact with a particular type of API.
+
+    It works with samples, meters, alarms, etc. and provide CRUD operations for
+    them.
     """
     resource_class = None
 
     def __init__(self, api):
         self.api = api
 
+    @property
+    def client(self):
+        """Compatible with latest oslo-incubator.apiclient code."""
+        return self.api
+
     def _create(self, url, body):
-        resp, body = self.api.json_request('POST', url, body=body)
+        body = self.api.post(url, json=body).json()
         if body:
             return self.resource_class(self, body)
 
     def _list(self, url, response_key=None, obj_class=None, body=None,
               expect_single=False):
-        resp, body = self.api.json_request('GET', url)
+        resp = self.api.get(url)
+        if not resp.content:
+            raise exc.HTTPNotFound
+        body = resp.json()
 
         if obj_class is None:
             obj_class = self.resource_class
@@ -72,18 +85,20 @@ class Manager(object):
         return [obj_class(self, res, loaded=True) for res in data if res]
 
     def _update(self, url, body, response_key=None):
-        resp, body = self.api.json_request('PUT', url, body=body)
+        body = self.api.put(url, json=body).json()
         # PUT requests may not return a body
         if body:
             return self.resource_class(self, body)
 
     def _delete(self, url):
-        self.api.raw_request('DELETE', url)
+        self.api.delete(url)
 
 
 class Resource(base.Resource):
-    """A resource represents a particular instance of an object (tenant, user,
-    etc). This is pretty much just a bag for attributes.
+    """A resource represents a particular instance of an object.
+
+    Resource might be tenant, user, etc.
+    This is pretty much just a bag for attributes.
 
     :param manager: Manager object
     :param info: dictionary representing resource attributes

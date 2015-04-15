@@ -1,4 +1,5 @@
-# Copyright 2013 Hewlett-Packard Development Company, L.P.
+# Copyright (c) 2012 Intel Corporation.
+# All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,17 +13,25 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from ceilometerclient.common import base
+"""
+UUID related utilities and helper functions.
+"""
+
+import uuid
 
 
-class TraitDescription(base.Resource):
-    def __repr__(self):
-        return "<Trait %s>" % self._info
+def generate_uuid():
+    return str(uuid.uuid4())
 
 
-class TraitDescriptionManager(base.Manager):
-    resource_class = TraitDescription
+def is_uuid_like(val):
+    """Returns validation of a value as a UUID.
 
-    def list(self, event_type):
-        path = '/v2/event_types/%s/traits' % event_type
-        return self._list(path)
+    For our purposes, a UUID is a canonical form string:
+    aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+
+    """
+    try:
+        return str(uuid.UUID(val)) == val
+    except (TypeError, ValueError, AttributeError):
+        return False

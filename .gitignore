@@ -6,6 +6,8 @@ build
 cover
 .testrepository
 .venv
+doc/build
+doc/source/ref
 subunit.log
 AUTHORS
 ChangeLog

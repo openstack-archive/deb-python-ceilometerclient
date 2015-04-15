@@ -23,7 +23,7 @@ from ceilometerclient.v2 import samples
 class QueryManager(base.Manager):
     path_suffix = None
 
-    def query(self, filter, orderby, limit):
+    def query(self, filter=None, orderby=None, limit=None):
         query = {}
         if filter:
             query["filter"] = filter
@@ -33,9 +33,9 @@ class QueryManager(base.Manager):
             query["limit"] = limit
 
         url = '/v2/query%s' % self.path_suffix
-        resp, body = self.api.json_request('POST',
-                                           url,
-                                           body=query)
+
+        body = self.api.post(url, json=query).json()
+
         if body:
             return [self.resource_class(self, b) for b in body]
         else:

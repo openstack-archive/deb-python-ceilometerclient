@@ -13,19 +13,35 @@
 
 import re
 
-from six.moves.urllib import parse
+from six.moves import urllib
+
+OP_LOOKUP = {'!=': 'ne',
+             '>=': 'ge',
+             '<=': 'le',
+             '>': 'gt',
+             '<': 'lt',
+             '=': 'eq'}
+
+OP_LOOKUP_KEYS = '|'.join(sorted(OP_LOOKUP.keys(), key=len, reverse=True))
+OP_SPLIT_RE = re.compile(r'(%s)' % OP_LOOKUP_KEYS)
+
+DATA_TYPE_RE = re.compile(r'^(string|integer|float|datetime|boolean)(::)(.+)$')
 
 
 def build_url(path, q, params=None):
-    '''This converts from a list of dicts and a list of params to
-       what the rest api needs, so from:
-    "[{field=this,op=le,value=34},{field=that,op=eq,value=foo}],
-     ['foo=bar','sna=fu']"
+    """Convert list of dicts and a list of params to query url format.
+
+    This will convert the following:
+        "[{field=this,op=le,value=34},
+          {field=that,op=eq,value=foo,type=string}],
+         ['foo=bar','sna=fu']"
     to:
-    "?q.field=this&q.op=le&q.value=34&
-      q.field=that&q.op=eq&q.value=foo&
-      foo=bar&sna=fu"
-    '''
+        "?q.field=this&q.field=that&
+          q.op=le&q.op=eq&
+          q.type=&q.type=string&
+          q.value=34&q.value=foo&
+          foo=bar&sna=fu"
+    """
     if q:
         query_params = {'q.field': [],
                         'q.value': [],
@@ -39,7 +55,7 @@ def build_url(path, q, params=None):
         # Transform the dict to a sequence of two-element tuples in fixed
         # order, then the encoded string will be consistent in Python 2&3.
         new_qparams = sorted(query_params.items(), key=lambda x: x[0])
-        path += "?" + parse.urlencode(new_qparams, doseq=True)
+        path += "?" + urllib.parse.urlencode(new_qparams, doseq=True)
 
         if params:
             for p in params:
@@ -52,56 +68,53 @@ def build_url(path, q, params=None):
 
 
 def cli_to_array(cli_query):
-    """This converts from the cli list of queries to what is required
-    by the python api.
-    so from:
-    "this<=34;that=foo"
+    """Convert CLI list of queries to the Python API format.
+
+    This will convert the following:
+        "this<=34;that=string::foo"
     to
-    "[{field=this,op=le,value=34},{field=that,op=eq,value=foo}]"
+        "[{field=this,op=le,value=34,type=''},
+          {field=that,op=eq,value=foo,type=string}]"
 
     """
 
     if cli_query is None:
         return None
 
-    op_lookup = {'!=': 'ne',
-                 '>=': 'ge',
-                 '<=': 'le',
-                 '>': 'gt',
-                 '<': 'lt',
-                 '=': 'eq'}
+    def split_by_op(query):
+        """Split a single query string to field, operator, value."""
 
-    def split_by_op(string):
-        # two character split (<=,!=)
-        frags = re.findall(r'([[a-zA-Z0-9_.]+)([><!]=)([^ -,\t\n\r\f\v]+)',
-                           string)
-        if len(frags) == 0:
-            #single char split (<,=)
-            frags = re.findall(r'([a-zA-Z0-9_.]+)([><=])([^ -,\t\n\r\f\v]+)',
-                               string)
-        return frags
+        def _value_error(message):
+            raise ValueError('invalid query %(query)s: missing %(message)s' %
+                             {'query': query, 'message': message})
 
-    def split_by_data_type(string):
-        frags = re.findall(r'^(string|integer|float|datetime|boolean)(::)'
-                           r'([^ -,\t\n\r\f\v]+)$', string)
+        try:
+            field, operator, value = OP_SPLIT_RE.split(query, maxsplit=1)
+        except ValueError:
+            _value_error('operator')
 
-        # frags[1] is the separator. Return a list without it if the type
-        # identifier was found.
-        return [frags[0][0], frags[0][2]] if frags else None
+        if not len(field):
+            _value_error('field')
+
+        if not len(value):
+            _value_error('value')
+
+        return field, operator, value
+
+    def split_by_data_type(query_value):
+        frags = DATA_TYPE_RE.match(query_value)
+
+        # The second match is the separator. Return a list without it if
+        # a type identifier was found.
+        return frags.group(1, 3) if frags else None
 
     opts = []
     queries = cli_query.split(';')
     for q in queries:
-        frag = split_by_op(q)
-        if len(frag) > 1:
-            raise ValueError('incorrect separator %s in query "%s"' %
-                             ('(should be ";")', q))
-        if len(frag) == 0:
-            raise ValueError('invalid query %s' % q)
-        query = frag[0]
+        query = split_by_op(q)
         opt = {}
         opt['field'] = query[0]
-        opt['op'] = op_lookup[query[1]]
+        opt['op'] = OP_LOOKUP[query[1]]
 
         # Allow the data type of the value to be specified via <type>::<value>,
         # where type can be one of integer, string, float, datetime, boolean

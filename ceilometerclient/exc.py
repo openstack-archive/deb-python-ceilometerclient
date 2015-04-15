@@ -35,11 +35,7 @@ class CommunicationError(BaseException):
     """Unable to communicate with server."""
 
 
-class ClientException(Exception):
-    """DEPRECATED."""
-
-
-class HTTPException(ClientException):
+class HTTPException(BaseException):
     """Base exception for all HTTP-derived exceptions."""
     code = 'N/A'
 
@@ -47,6 +43,14 @@ class HTTPException(ClientException):
         self.details = details
 
     def __str__(self):
+        try:
+            data = json.loads(self.details)
+            message = data.get("error_message", {}).get("faultstring")
+            if message:
+                return "%s (HTTP %s) ERROR %s" % (
+                    self.__class__.__name__, self.code, message)
+        except (ValueError, TypeError, AttributeError):
+            pass
         return "%s (HTTP %s)" % (self.__class__.__name__, self.code)
 
 
@@ -60,72 +64,32 @@ class HTTPMultipleChoices(HTTPException):
                                     self.details)
 
 
-class BadRequest(HTTPException):
-    """DEPRECATED."""
+class HTTPBadRequest(HTTPException):
     code = 400
 
 
-class HTTPBadRequest(BadRequest):
-
-    def __str__(self):
-        try:
-            data = json.loads(self.details)
-            message = data.get("error_message", {}).get("faultstring")
-            if message:
-                return "%s (HTTP %s) ERROR %s" % (
-                    self.__class__.__name__, self.code, message)
-        except (ValueError, TypeError, AttributeError):
-            pass
-        return super(HTTPBadRequest, self).__str__()
-
-
-class Unauthorized(HTTPException):
-    """DEPRECATED."""
+class HTTPUnauthorized(HTTPException):
     code = 401
 
 
-class HTTPUnauthorized(Unauthorized):
-    pass
-
-
-class Forbidden(HTTPException):
-    """DEPRECATED."""
+class HTTPForbidden(HTTPException):
     code = 403
 
 
-class HTTPForbidden(Forbidden):
-    pass
-
-
-class NotFound(HTTPException):
-    """DEPRECATED."""
+class HTTPNotFound(HTTPException):
     code = 404
-
-
-class HTTPNotFound(NotFound):
-    pass
 
 
 class HTTPMethodNotAllowed(HTTPException):
     code = 405
 
 
-class Conflict(HTTPException):
-    """DEPRECATED."""
+class HTTPConflict(HTTPException):
     code = 409
 
 
-class HTTPConflict(Conflict):
-    pass
-
-
-class OverLimit(HTTPException):
-    """DEPRECATED."""
+class HTTPOverLimit(HTTPException):
     code = 413
-
-
-class HTTPOverLimit(OverLimit):
-    pass
 
 
 class HTTPInternalServerError(HTTPException):
@@ -140,16 +104,11 @@ class HTTPBadGateway(HTTPException):
     code = 502
 
 
-class ServiceUnavailable(HTTPException):
-    """DEPRECATED."""
+class HTTPServiceUnavailable(HTTPException):
     code = 503
 
 
-class HTTPServiceUnavailable(ServiceUnavailable):
-    pass
-
-
-#NOTE(bcwaldon): Build a mapping of HTTP codes to corresponding exception
+# NOTE(bcwaldon): Build a mapping of HTTP codes to corresponding exception
 # classes
 _code_map = {}
 for obj_name in dir(sys.modules[__name__]):
@@ -162,13 +121,3 @@ def from_response(response, details=None):
     """Return an instance of an HTTPException based on httplib response."""
     cls = _code_map.get(response.status, HTTPException)
     return cls(details)
-
-
-class NoTokenLookupException(Exception):
-    """DEPRECATED."""
-    pass
-
-
-class EndpointNotFound(Exception):
-    """DEPRECATED."""
-    pass

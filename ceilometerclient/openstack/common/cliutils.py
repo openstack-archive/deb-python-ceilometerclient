@@ -16,18 +16,29 @@
 # W0621: Redefining name %s from outer scope
 # pylint: disable=W0603,W0621
 
+from __future__ import print_function
+
 import getpass
 import inspect
 import os
 import sys
 import textwrap
 
+from oslo.utils import encodeutils
+from oslo.utils import strutils
 import prettytable
 import six
 from six import moves
 
-from ceilometerclient.openstack.common.apiclient import exceptions
-from ceilometerclient.openstack.common import strutils
+from ceilometerclient.openstack.common._i18n import _
+
+
+class MissingArgs(Exception):
+    """Supplied arguments are not sufficient for calling a function."""
+    def __init__(self, missing):
+        self.missing = missing
+        msg = _("Missing arguments: %s") % ", ".join(missing)
+        super(MissingArgs, self).__init__(msg)
 
 
 def validate_args(fn, *args, **kwargs):
@@ -52,7 +63,7 @@ def validate_args(fn, *args, **kwargs):
     required_args = argspec.args[:len(argspec.args) - num_defaults]
 
     def isbound(method):
-        return getattr(method, 'im_self', None) is not None
+        return getattr(method, '__self__', None) is not None
 
     if isbound(fn):
         required_args.pop(0)
@@ -60,7 +71,7 @@ def validate_args(fn, *args, **kwargs):
     missing = [arg for arg in required_args if arg not in kwargs]
     missing = missing[len(args):]
     if missing:
-        raise exceptions.MissingArgs(missing)
+        raise MissingArgs(missing)
 
 
 def arg(*args, **kwargs):
@@ -84,7 +95,7 @@ def env(*args, **kwargs):
     If all are empty, defaults to '' or keyword arg `default`.
     """
     for arg in args:
-        value = os.environ.get(arg, None)
+        value = os.environ.get(arg)
         if value:
             return value
     return kwargs.get('default', '')
@@ -128,7 +139,7 @@ def isunauthenticated(func):
 
 
 def print_list(objs, fields, formatters=None, sortby_index=0,
-               mixed_case_fields=None):
+               mixed_case_fields=None, field_labels=None):
     """Print a list or objects as a table, one row per object.
 
     :param objs: iterable of :class:`Resource`
@@ -137,14 +148,22 @@ def print_list(objs, fields, formatters=None, sortby_index=0,
     :param sortby_index: index of the field for sorting table rows
     :param mixed_case_fields: fields corresponding to object attributes that
         have mixed case names (e.g., 'serverId')
+    :param field_labels: Labels to use in the heading of the table, default to
+        fields.
     """
     formatters = formatters or {}
     mixed_case_fields = mixed_case_fields or []
+    field_labels = field_labels or fields
+    if len(field_labels) != len(fields):
+        raise ValueError(_("Field labels list %(labels)s has different number "
+                           "of elements than fields list %(fields)s"),
+                         {'labels': field_labels, 'fields': fields})
+
     if sortby_index is None:
         kwargs = {}
     else:
-        kwargs = {'sortby': fields[sortby_index]}
-    pt = prettytable.PrettyTable(fields, caching=False)
+        kwargs = {'sortby': field_labels[sortby_index]}
+    pt = prettytable.PrettyTable(field_labels)
     pt.align = 'l'
 
     for o in objs:
@@ -161,7 +180,10 @@ def print_list(objs, fields, formatters=None, sortby_index=0,
                 row.append(data)
         pt.add_row(row)
 
-    print(strutils.safe_encode(pt.get_string(**kwargs)))
+    if six.PY3:
+        print(encodeutils.safe_encode(pt.get_string(**kwargs)).decode())
+    else:
+        print(encodeutils.safe_encode(pt.get_string(**kwargs)))
 
 
 def print_dict(dct, dict_property="Property", wrap=0):
@@ -171,14 +193,14 @@ def print_dict(dct, dict_property="Property", wrap=0):
     :param dict_property: name of the first column
     :param wrap: wrapping for the second column
     """
-    pt = prettytable.PrettyTable([dict_property, 'Value'], caching=False)
+    pt = prettytable.PrettyTable([dict_property, 'Value'])
     pt.align = 'l'
     for k, v in six.iteritems(dct):
         # convert dict to str to check length
         if isinstance(v, dict):
-            v = str(v)
+            v = six.text_type(v)
         if wrap > 0:
-            v = textwrap.fill(str(v), wrap)
+            v = textwrap.fill(six.text_type(v), wrap)
         # if value has a newline, add in multiple rows
         # e.g. fault with stacktrace
         if v and isinstance(v, six.string_types) and r'\n' in v:
@@ -189,7 +211,11 @@ def print_dict(dct, dict_property="Property", wrap=0):
                 col1 = ''
         else:
             pt.add_row([k, v])
-    print(strutils.safe_encode(pt.get_string()))
+
+    if six.PY3:
+        print(encodeutils.safe_encode(pt.get_string()).decode())
+    else:
+        print(encodeutils.safe_encode(pt.get_string()))
 
 
 def get_password(max_password_prompts=3):
@@ -199,7 +225,7 @@ def get_password(max_password_prompts=3):
     if hasattr(sys.stdin, "isatty") and sys.stdin.isatty():
         # Check for Ctrl-D
         try:
-            for _ in moves.range(max_password_prompts):
+            for __ in moves.range(max_password_prompts):
                 pw1 = getpass.getpass("OS Password: ")
                 if verify:
                     pw2 = getpass.getpass("Please verify: ")
@@ -211,3 +237,35 @@ def get_password(max_password_prompts=3):
         except EOFError:
             pass
     return pw
+
+
+def service_type(stype):
+    """Adds 'service_type' attribute to decorated function.
+
+    Usage:
+
+    .. code-block:: python
+
+       @service_type('volume')
+       def mymethod(f):
+       ...
+    """
+    def inner(f):
+        f.service_type = stype
+        return f
+    return inner
+
+
+def get_service_type(f):
+    """Retrieves service type from function."""
+    return getattr(f, 'service_type', None)
+
+
+def pretty_choice_list(l):
+    return ', '.join("'%s'" % i for i in l)
+
+
+def exit(msg=''):
+    if msg:
+        print (msg, file=sys.stderr)
+    sys.exit(1)

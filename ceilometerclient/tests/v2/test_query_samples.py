@@ -1,7 +1,5 @@
 # Copyright Ericsson AB 2014. All rights reserved
 #
-# Author: Balazs Gibizer <balazs.gibizer@ericsson.com>
-#
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -14,6 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from ceilometerclient.openstack.common.apiclient import client
+from ceilometerclient.openstack.common.apiclient import fake_client
 from ceilometerclient.tests import utils
 from ceilometerclient.v2 import query
 
@@ -53,13 +53,15 @@ class QuerySamplesManagerTest(utils.BaseTestCase):
 
     def setUp(self):
         super(QuerySamplesManagerTest, self).setUp()
-        self.api = utils.FakeAPI(fixtures)
+        self.http_client = fake_client.FakeHTTPClient(fixtures=fixtures)
+        self.api = client.BaseClient(self.http_client)
         self.mgr = query.QuerySamplesManager(self.api)
 
     def test_query(self):
         samples = self.mgr.query(**QUERY)
         expect = [
-            ('POST', '/v2/query/samples', {}, QUERY),
+
+            'POST', '/v2/query/samples', QUERY,
         ]
-        self.assertEqual(expect, self.api.calls)
+        self.http_client.assert_called(*expect)
         self.assertEqual(1, len(samples))
