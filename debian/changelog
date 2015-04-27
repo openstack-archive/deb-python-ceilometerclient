@@ -1,4 +1,4 @@
-python-ceilometerclient (1.0.13-1) UNRELEASED; urgency=medium
+python-ceilometerclient (1.0.13-1) unstable; urgency=medium
 
   * New upstream release.
   * Now generating the doc.
