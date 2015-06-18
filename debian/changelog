@@ -1,3 +1,9 @@
+python-ceilometerclient (1.2.0-1) experimental; urgency=medium
+
+  * New upstream release.
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 18 Jun 2015 15:09:57 +0200
+
 python-ceilometerclient (1.0.13-1) unstable; urgency=medium
 
   * New upstream release.
