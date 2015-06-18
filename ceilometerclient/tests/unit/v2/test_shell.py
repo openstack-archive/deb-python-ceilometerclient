@@ -24,8 +24,10 @@ from testtools import matchers
 
 from ceilometerclient import exc
 from ceilometerclient import shell as base_shell
-from ceilometerclient.tests import utils
+from ceilometerclient.tests.unit import test_shell
+from ceilometerclient.tests.unit import utils
 from ceilometerclient.v2 import alarms
+from ceilometerclient.v2 import capabilities
 from ceilometerclient.v2 import events
 from ceilometerclient.v2 import samples
 from ceilometerclient.v2 import shell as ceilometer_shell
@@ -1118,4 +1120,107 @@ class ShellEventListCommandTest(utils.BaseTestCase):
 | 2015-01-12T04:03:28.452495 |
 +--------------------------------------+-------------------------------\
 +----------------------------+
+''', sys.stdout.getvalue())
+
+
+class ShellShadowedArgsTest(test_shell.ShellTestBase):
+
+    def _test_shadowed_args_alarm(self, command, args, method):
+        self.make_env(test_shell.FAKE_V2_ENV)
+        cli_args = [
+            '--os-project-id', '0ba30185ddf44834914a0b859d244c56',
+            '--os-user-id', '85f59b3b17484ccb974c50596023bf8c',
+            '--debug', command,
+            '--project-id', 'the-project-id-i-want-to-set',
+            '--user-id', 'the-user-id-i-want-to-set',
+            '--name', 'project-id-test'] + args
+        with mock.patch.object(alarms.AlarmManager, method) as mocked:
+            base_shell.main(cli_args)
+        args, kwargs = mocked.call_args
+        self.assertEqual('the-project-id-i-want-to-set',
+                         kwargs.get('project_id'))
+        self.assertEqual('the-user-id-i-want-to-set',
+                         kwargs.get('user_id'))
+
+    def test_shadowed_args_threshold_alarm(self):
+        cli_args = ['--meter-name', 'cpu', '--threshold', '90']
+        self._test_shadowed_args_alarm('alarm-create', cli_args, 'create')
+        self._test_shadowed_args_alarm('alarm-threshold-create',
+                                       cli_args, 'create')
+        cli_args += ['--alarm_id', '437b7ed0-3733-4054-a877-e9a297b8be85']
+        self._test_shadowed_args_alarm('alarm-update', cli_args, 'update')
+        self._test_shadowed_args_alarm('alarm-threshold-update',
+                                       cli_args, 'update')
+
+    def test_shadowed_args_combination_alarm(self):
+        cli_args = ['--alarm_ids', 'fb16a05a-669d-414e-8bbe-93aa381df6a8',
+                    '--alarm_ids', 'b189bcca-0a7b-49a9-a244-a927ac291881']
+        self._test_shadowed_args_alarm('alarm-combination-create',
+                                       cli_args, 'create')
+        cli_args += ['--alarm_id', '437b7ed0-3733-4054-a877-e9a297b8be85']
+        self._test_shadowed_args_alarm('alarm-combination-update',
+                                       cli_args, 'update')
+
+    @mock.patch.object(samples.OldSampleManager, 'create')
+    def test_shadowed_args_sample_create(self, mocked):
+        self.make_env(test_shell.FAKE_V2_ENV)
+        cli_args = [
+            '--os-project-id', '0ba30185ddf44834914a0b859d244c56',
+            '--os-user-id', '85f59b3b17484ccb974c50596023bf8c',
+            '--debug', 'sample-create',
+            '--project-id', 'the-project-id-i-want-to-set',
+            '--user-id', 'the-user-id-i-want-to-set',
+            '--resource-id', 'b666633d-9bb6-4e05-89c0-ee5a8752fb0b',
+            '--meter-name', 'cpu',
+            '--meter-type', 'cumulative',
+            '--meter-unit', 'ns',
+            '--sample-volume', '10086',
+        ]
+        base_shell.main(cli_args)
+        args, kwargs = mocked.call_args
+        self.assertEqual('the-project-id-i-want-to-set',
+                         kwargs.get('project_id'))
+        self.assertEqual('the-user-id-i-want-to-set',
+                         kwargs.get('user_id'))
+
+
+class ShellCapabilityShowTest(utils.BaseTestCase):
+
+    CAPABILITIES = {
+        "alarm_storage": {
+            "storage:production_ready": True
+        },
+        "api": {
+            "alarms:query:complex": True,
+            "alarms:query:simple": True
+        },
+        "event_storage": {
+            "storage:production_ready": True
+        },
+        "storage": {
+            "storage:production_ready": True
+        },
+    }
+
+    def setUp(self):
+        super(ShellCapabilityShowTest, self).setUp()
+        self.cc = mock.Mock()
+        self.args = mock.Mock()
+
+    @mock.patch('sys.stdout', new=six.StringIO())
+    def test_capability_show(self):
+        _cap = capabilities.Capabilities(mock.Mock, self.CAPABILITIES)
+        self.cc.capabilities.get.return_value = _cap
+
+        ceilometer_shell.do_capabilities(self.cc, self.args)
+        self.assertEqual('''\
++---------------+----------------------------------+
+| Property      | Value                            |
++---------------+----------------------------------+
+| alarm_storage | "storage:production_ready": true |
+| api           | "alarms:query:complex": true,    |
+|               | "alarms:query:simple": true      |
+| event_storage | "storage:production_ready": true |
+| storage       | "storage:production_ready": true |
++---------------+----------------------------------+
 ''', sys.stdout.getvalue())

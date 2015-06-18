@@ -12,11 +12,12 @@
 
 import types
 
+from keystoneclient import session as ks_session
 import mock
 
 from ceilometerclient import client
-from ceilometerclient.tests import fakes
-from ceilometerclient.tests import utils
+from ceilometerclient.tests.unit import fakes
+from ceilometerclient.tests.unit import utils
 from ceilometerclient.v1 import client as v1client
 from ceilometerclient.v2 import client as v2client
 
@@ -41,9 +42,6 @@ class ClientTest(utils.BaseTestCase):
                    if k not in exclude)
 
         return client.get_client(api_version, **env)
-
-    def setUp(self):
-        super(ClientTest, self).setUp()
 
     def test_client_version(self):
         c1 = self.create_client(env=FAKE_ENV, api_version=1)
@@ -84,8 +82,10 @@ class ClientTest(utils.BaseTestCase):
             'service_type': None,
             'token': '1234',
             'endpoint_type': None,
+            'region_name': None,
             'auth_url': 'http://no.where',
             'tenant_id': None,
+            'insecure': None,
             'cacert': None,
             'password': 'password',
             'user_domain_name': 'default',
@@ -94,7 +94,7 @@ class ClientTest(utils.BaseTestCase):
             'project_domain_id': None,
         }
         with mock.patch('ceilometerclient.client.AuthPlugin') as auth_plugin:
-            self.create_client(env, api_version=2)
+            self.create_client(env, api_version=2, endpoint='http://no.where')
             auth_plugin.assert_called_with(**expected)
 
     def test_client_with_auth_plugin(self):
@@ -136,6 +136,18 @@ class ClientTest(utils.BaseTestCase):
     def test_v2_client_timeout_valid_value(self):
         self._test_v2_client_timeout_integer(30, 30)
 
+    @mock.patch.object(ks_session, 'Session')
+    def test_v2_client_timeout_keystone_seesion(self, mocked_session):
+        mocked_session.side_effect = RuntimeError('Stop!')
+        env = FAKE_ENV.copy()
+        env['timeout'] = 5
+        del env['auth_plugin']
+        del env['token']
+        client = self.create_client(env)
+        self.assertRaises(RuntimeError, client.alarms.list)
+        args, kwargs = mocked_session.call_args
+        self.assertEqual(5, kwargs['timeout'])
+
     def test_v2_client_cacert_in_verify(self):
         env = FAKE_ENV.copy()
         env['cacert'] = '/path/to/cacert'
@@ -149,3 +161,21 @@ class ClientTest(utils.BaseTestCase):
         client = self.create_client(env)
         self.assertEqual(('/path/to/cert', '/path/to/keycert'),
                          client.client.cert)
+
+    def test_v2_client_insecure(self):
+        env = FAKE_ENV.copy()
+        env.pop('auth_plugin')
+        env['insecure'] = 'True'
+        client = self.create_client(env)
+        self.assertIn('insecure', client.auth_plugin.opts)
+        self.assertEqual('True', client.auth_plugin.opts['insecure'])
+
+
+class ClientTest2(ClientTest):
+    @staticmethod
+    def create_client(env, api_version=2, endpoint=None, exclude=[]):
+        env = dict((k, v) for k, v in env.items()
+                   if k not in exclude)
+
+        # Run the same tests with direct instantiation of the Client
+        return client.Client(api_version, endpoint, **env)

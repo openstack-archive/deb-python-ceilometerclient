@@ -22,7 +22,7 @@ from testtools import matchers
 from ceilometerclient import exc
 from ceilometerclient.openstack.common.apiclient import client as api_client
 from ceilometerclient import shell as ceilometer_shell
-from ceilometerclient.tests import utils
+from ceilometerclient.tests.unit import utils
 from ceilometerclient.v2 import client as v2client
 
 FAKE_V2_ENV = {'OS_USERNAME': 'username',
@@ -91,6 +91,11 @@ class ShellHelpTest(ShellTestBase):
             for r in required:
                 self.assertThat(help_text,
                                 matchers.MatchesRegex(r, self.RE_OPTIONS))
+
+    def test_get_base_parser(self):
+        standalone_shell = ceilometer_shell.CeilometerShell()
+        parser = standalone_shell.get_base_parser()
+        self.assertEqual(600, parser.get_default('timeout'))
 
 
 class ShellKeystoneV2Test(ShellTestBase):
@@ -171,6 +176,15 @@ class ShellTimeoutTest(ShellTestBase):
                         '0 must be greater than 0')
         self._test_timeout('0', expected_msg)
 
+    @mock.patch.object(ks_session, 'Session')
+    def test_timeout_kesytone_session(self, mocked_session):
+        mocked_session.side_effect = exc.HTTPUnauthorized("FAIL")
+        self.make_env(FAKE_V2_ENV)
+        args = ['--debug', '--timeout', '5', 'alarm-list']
+        self.assertRaises(exc.CommandError, ceilometer_shell.main, args)
+        args, kwargs = mocked_session.call_args
+        self.assertEqual(5, kwargs.get('timeout'))
+
 
 class ShellInsecureTest(ShellTestBase):
 
@@ -188,7 +202,8 @@ class ShellInsecureTest(ShellTestBase):
         self.make_env(FAKE_V2_ENV)
         args = ['--debug', '--os-insecure', 'true', 'alarm-list']
         self.assertRaises(exc.CommandError, ceilometer_shell.main, args)
-        mocked_session.assert_called_with(verify=False, cert='')
+        args, kwargs = mocked_session.call_args
+        self.assertEqual(False, kwargs.get('verify'))
 
     @mock.patch.object(api_client, 'HTTPClient')
     def test_insecure_false_ceilometer(self, mocked_client):
@@ -204,7 +219,8 @@ class ShellInsecureTest(ShellTestBase):
         self.make_env(FAKE_V2_ENV)
         args = ['--debug', '--os-insecure', 'false', 'alarm-list']
         self.assertRaises(exc.CommandError, ceilometer_shell.main, args)
-        mocked_session.assert_called_with(verify=True, cert='')
+        args, kwargs = mocked_session.call_args
+        self.assertEqual(True, kwargs.get('verify'))
 
 
 class ShellEndpointTest(ShellTestBase):

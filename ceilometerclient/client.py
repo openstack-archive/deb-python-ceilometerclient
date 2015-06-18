@@ -66,6 +66,7 @@ def _get_keystone_session(**kwargs):
     auth_url = kwargs.pop('auth_url', None)
     project_id = kwargs.pop('project_id', None)
     project_name = kwargs.pop('project_name', None)
+    timeout = kwargs.get('timeout')
 
     if insecure:
         verify = False
@@ -78,7 +79,7 @@ def _get_keystone_session(**kwargs):
         cert = (cert, key)
 
     # create the keystone client session
-    ks_session = session.Session(verify=verify, cert=cert)
+    ks_session = session.Session(verify=verify, cert=cert, timeout=timeout)
     v2_auth_url, v3_auth_url = _discover_auth_versions(ks_session, auth_url)
 
     username = kwargs.pop('username', None)
@@ -105,6 +106,8 @@ def _get_keystone_session(**kwargs):
             user_id=user_id,
             user_domain_name=user_domain_name,
             user_domain_id=user_domain_id,
+            project_name=project_name,
+            project_id=project_id,
             project_domain_name=project_domain_name,
             project_domain_id=project_domain_id)
     elif use_v2:
@@ -145,7 +148,8 @@ class AuthPlugin(auth.BaseAuthPlugin):
                  'service_type', 'endpoint_type', 'cacert',
                  'auth_url', 'insecure', 'cert_file', 'key_file',
                  'cert', 'key', 'tenant_name', 'project_name',
-                 'project_id', 'user_domain_id', 'user_domain_name',
+                 'project_id', 'project_domain_id', 'project_domain_name',
+                 'user_id', 'user_domain_id', 'user_domain_name',
                  'password', 'username', 'endpoint']
 
     def __init__(self, auth_system=None, **kwargs):
@@ -177,6 +181,8 @@ class AuthPlugin(auth.BaseAuthPlugin):
                 'insecure': strutils.bool_from_string(
                     self.opts.get('insecure')),
                 'endpoint_type': self.opts.get('endpoint_type'),
+                'region_name': self.opts.get('region_name'),
+                'timeout': http_client.timeout,
             }
 
             # retrieve session
@@ -215,14 +221,30 @@ class AuthPlugin(auth.BaseAuthPlugin):
             raise exceptions.AuthPluginOptionsMissing(missing_opts)
 
 
-def Client(version, *args, **kwargs):
-    module = utils.import_versioned_module(version, 'client')
-    client_class = getattr(module, 'Client')
-    kwargs['token'] = kwargs.get('token') or kwargs.get('auth_token')
-    return client_class(*args, **kwargs)
+def _adjust_kwargs(kwargs):
+    client_kwargs = {
+        'username': kwargs.get('os_username'),
+        'password': kwargs.get('os_password'),
+        'tenant_id': kwargs.get('os_tenant_id'),
+        'tenant_name': kwargs.get('os_tenant_name'),
+        'auth_url': kwargs.get('os_auth_url'),
+        'region_name': kwargs.get('os_region_name'),
+        'service_type': kwargs.get('os_service_type'),
+        'endpoint_type': kwargs.get('os_endpoint_type'),
+        'insecure': kwargs.get('os_insecure'),
+        'cacert': kwargs.get('os_cacert'),
+        'cert_file': kwargs.get('os_cert'),
+        'key_file': kwargs.get('os_key'),
+        'token': kwargs.get('os_token') or kwargs.get('os_auth_token'),
+        'user_domain_name': kwargs.get('os_user_domain_name'),
+        'user_domain_id': kwargs.get('os_user_domain_id'),
+        'project_domain_name': kwargs.get('os_project_domain_name'),
+        'project_domain_id': kwargs.get('os_project_domain_id'),
+    }
 
+    client_kwargs.update(kwargs)
+    client_kwargs['token'] = kwargs.get('token') or kwargs.get('auth_token')
 
-def _adjust_params(kwargs):
     timeout = kwargs.get('timeout')
     if timeout is not None:
         timeout = int(timeout)
@@ -241,7 +263,17 @@ def _adjust_params(kwargs):
     key = kwargs.get('key_file')
     if cert and key:
         cert = cert, key
-    return {'verify': verify, 'cert': cert, 'timeout': timeout}
+
+    client_kwargs.update({'verify': verify, 'cert': cert, 'timeout': timeout})
+    return client_kwargs
+
+
+def Client(version, *args, **kwargs):
+    client_kwargs = _adjust_kwargs(kwargs)
+
+    module = utils.import_versioned_module(version, 'client')
+    client_class = getattr(module, 'Client')
+    return client_class(*args, **client_kwargs)
 
 
 def get_client(version, **kwargs):
@@ -256,7 +288,9 @@ def get_client(version, **kwargs):
             * ceilometer_url: (DEPRECATED) Ceilometer API endpoint,
                               use os_endpoint instead
             * os_endpoint: Ceilometer API endpoint
+
             or:
+
             * os_username: name of user
             * os_password: user's password
             * os_user_id: user's id
@@ -271,33 +305,11 @@ def get_client(version, **kwargs):
             * os_auth_url: endpoint to authenticate against
             * os_cert|os_cacert: path of CA TLS certificate
             * os_key: SSL private key
-            * insecure: allow insecure SSL (no cert verification)
+            * os_insecure: allow insecure SSL (no cert verification)
     """
     endpoint = kwargs.get('os_endpoint') or kwargs.get('ceilometer_url')
 
-    cli_kwargs = {
-        'username': kwargs.get('os_username'),
-        'password': kwargs.get('os_password'),
-        'tenant_id': kwargs.get('os_tenant_id'),
-        'tenant_name': kwargs.get('os_tenant_name'),
-        'auth_url': kwargs.get('os_auth_url'),
-        'region_name': kwargs.get('os_region_name'),
-        'service_type': kwargs.get('os_service_type'),
-        'endpoint_type': kwargs.get('os_endpoint_type'),
-        'cacert': kwargs.get('os_cacert'),
-        'cert_file': kwargs.get('os_cert'),
-        'key_file': kwargs.get('os_key'),
-        'token': kwargs.get('os_token') or kwargs.get('os_auth_token'),
-        'user_domain_name': kwargs.get('os_user_domain_name'),
-        'user_domain_id': kwargs.get('os_user_domain_id'),
-        'project_domain_name': kwargs.get('os_project_domain_name'),
-        'project_domain_id': kwargs.get('os_project_domain_id'),
-    }
-
-    cli_kwargs.update(kwargs)
-    cli_kwargs.update(_adjust_params(cli_kwargs))
-
-    return Client(version, endpoint, **cli_kwargs)
+    return Client(version, endpoint, **kwargs)
 
 
 def get_auth_plugin(endpoint, **kwargs):
@@ -306,6 +318,8 @@ def get_auth_plugin(endpoint, **kwargs):
         service_type=kwargs.get('service_type'),
         token=kwargs.get('token'),
         endpoint_type=kwargs.get('endpoint_type'),
+        insecure=kwargs.get('insecure'),
+        region_name=kwargs.get('region_name'),
         cacert=kwargs.get('cacert'),
         tenant_id=kwargs.get('project_id') or kwargs.get('tenant_id'),
         endpoint=endpoint,
