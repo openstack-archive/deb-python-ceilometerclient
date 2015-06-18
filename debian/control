@@ -2,7 +2,7 @@ Source: python-ceilometerclient
 Section: python
 Priority: extra
 Maintainer: PKG OpenStack <openstack-devel@lists.alioth.debian.org>
-Uploaders: Thomas Goirand <zigo@debian.org>
+Uploaders: Thomas Goirand <zigo@debian.org>,
 Build-Depends: debhelper (>= 9),
                dh-python,
                openstack-pkg-tools,
@@ -10,6 +10,9 @@ Build-Depends: debhelper (>= 9),
                python-pbr,
                python-setuptools,
                python-sphinx,
+               python3-all,
+               python3-pbr,
+               python3-setuptools,
 Build-Depends-Indep: python-coverage,
                      python-fixtures,
                      python-hacking,
@@ -26,6 +29,22 @@ Build-Depends-Indep: python-coverage,
                      python-stevedore (>= 1.3.0),
                      python-tempest-lib (>= 0.4.0),
                      python-testtools,
+                     python3-fixtures,
+                     python3-hacking,
+                     python3-iso8601,
+                     python3-keystoneclient (>= 1:1.1.0),
+                     python3-mock,
+                     python3-oslo.i18n (>= 1.5.0),
+                     python3-oslo.serialization (>= 1.4.0),
+                     python3-oslo.utils (>= 1.4.0),
+                     python3-oslosphinx (>= 2.5.0),
+                     python3-prettytable,
+                     python3-requests,
+                     python3-six (>= 1.9.0),
+                     python3-stevedore (>= 1.3.0),
+                     python3-subunit,
+                     python3-tempest-lib (>= 0.4.0),
+                     python3-testtools,
                      subunit,
                      testrepository,
 Standards-Version: 3.9.6
@@ -47,8 +66,8 @@ Depends: python-iso8601,
          python-stevedore (>= 1.3.0),
          ${misc:Depends},
          ${python:Depends},
-         ${sphinxdoc:Depends},
-Description: Client library for Openstack Ceilometer API server
+Suggests: python-ceilometerclient-doc
+Description: Client library for Openstack Ceilometer API server - Python 2.7
  Ceilometer aims to deliver a unique point of contact for billing systems to
  aquire all counters they need to establish customer billing, accross all
  current and future OpenStack components. The delivery of counters must be
@@ -59,3 +78,52 @@ Description: Client library for Openstack Ceilometer API server
  This is a client for the Ceilometer which uses the OpenStack Image API.
  There's a Python API (the "ceilometerclient" module), and a command-line
  script ("ceilometer").
+ .
+ This package contains the Python 2.7 module.
+
+Package: python3-ceilometerclient
+Architecture: all
+Depends: python3-iso8601,
+         python3-keystoneclient (>= 1:1.1.0),
+         python3-oslo.i18n (>= 1.5.0),
+         python3-oslo.serialization (>= 1.4.0),
+         python3-oslo.utils (>= 1.4.0),
+         python3-pbr,
+         python3-prettytable,
+         python3-requests,
+         python3-six (>= 1.9.0),
+         python3-stevedore (>= 1.3.0),
+         ${misc:Depends},
+         ${python:Depends},
+Suggests: python-ceilometerclient-doc
+Description: Client library for Openstack Ceilometer API server - Python 3.x
+ Ceilometer aims to deliver a unique point of contact for billing systems to
+ aquire all counters they need to establish customer billing, accross all
+ current and future OpenStack components. The delivery of counters must be
+ tracable and auditable, the counters must be easily extensible to support new
+ projects, and agents doing data collections should be independent of the
+ overall system.
+ .
+ This is a client for the Ceilometer which uses the OpenStack Image API.
+ There's a Python API (the "ceilometerclient" module), and a command-line
+ script ("ceilometer").
+ .
+ This package contains the Python 3.x module.
+
+Package: python3-ceilometerclient
+Architecture: all
+Depends: ${misc:Depends},
+         ${sphinxdoc:Depends},
+Description: Client library for Openstack Ceilometer API server - doc
+ Ceilometer aims to deliver a unique point of contact for billing systems to
+ aquire all counters they need to establish customer billing, accross all
+ current and future OpenStack components. The delivery of counters must be
+ tracable and auditable, the counters must be easily extensible to support new
+ projects, and agents doing data collections should be independent of the
+ overall system.
+ .
+ This is a client for the Ceilometer which uses the OpenStack Image API.
+ There's a Python API (the "ceilometerclient" module), and a command-line
+ script ("ceilometer").
+ .
+ This package contains the documentation.
