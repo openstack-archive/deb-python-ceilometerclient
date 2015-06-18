@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "disappear" ] ; then
+	update-alternatives --remove ceilometer /usr/bin/python3-ceilometer
+fi
+
+#DEBHELPER#
+
+exit 0

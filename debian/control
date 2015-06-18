@@ -37,7 +37,6 @@ Build-Depends-Indep: python-coverage,
                      python3-oslo.i18n (>= 1.5.0),
                      python3-oslo.serialization (>= 1.4.0),
                      python3-oslo.utils (>= 1.4.0),
-                     python3-oslosphinx (>= 2.5.0),
                      python3-prettytable,
                      python3-requests,
                      python3-six (>= 1.9.0),
@@ -94,7 +93,7 @@ Depends: python3-iso8601,
          python3-six (>= 1.9.0),
          python3-stevedore (>= 1.3.0),
          ${misc:Depends},
-         ${python:Depends},
+         ${python3:Depends},
 Suggests: python-ceilometerclient-doc
 Description: Client library for Openstack Ceilometer API server - Python 3.x
  Ceilometer aims to deliver a unique point of contact for billing systems to
@@ -110,7 +109,8 @@ Description: Client library for Openstack Ceilometer API server - Python 3.x
  .
  This package contains the Python 3.x module.
 
-Package: python3-ceilometerclient
+Package: python-ceilometerclient-doc
+Section: doc
 Architecture: all
 Depends: ${misc:Depends},
          ${sphinxdoc:Depends},
