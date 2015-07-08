@@ -1,3 +1,9 @@
+python-ceilometerclient (1.2.0-2) experimental; urgency=medium
+
+  * Add autopkgtests from Ubuntu.
+
+ -- James Page <james.page@ubuntu.com>  Wed, 08 Jul 2015 17:08:43 +0100
+
 python-ceilometerclient (1.2.0-1) experimental; urgency=medium
 
   * New upstream release.

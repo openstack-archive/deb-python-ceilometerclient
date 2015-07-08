@@ -50,6 +50,7 @@ Standards-Version: 3.9.6
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-ceilometerclient.git;a=summary
 Vcs-Git: git://anonscm.debian.org/openstack/python-ceilometerclient.git
 Homepage: http://www.openstack.org
+XS-Testsuite: autopkgtest
 
 Package: python-ceilometerclient
 Architecture: all
