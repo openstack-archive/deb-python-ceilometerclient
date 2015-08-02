@@ -15,7 +15,7 @@ from keystoneclient.auth.identity import v3 as v3_auth
 from keystoneclient import discover
 from keystoneclient import exceptions as ks_exc
 from keystoneclient import session
-from oslo.utils import strutils
+from oslo_utils import strutils
 import six.moves.urllib.parse as urlparse
 
 from ceilometerclient.common import utils
@@ -257,10 +257,10 @@ def _adjust_kwargs(kwargs):
         if insecure:
             verify = False
         else:
-            verify = kwargs.get('cacert') or True
+            verify = client_kwargs.get('cacert') or True
 
-    cert = kwargs.get('cert_file')
-    key = kwargs.get('key_file')
+    cert = client_kwargs.get('cert_file')
+    key = client_kwargs.get('key_file')
     if cert and key:
         cert = cert, key
 

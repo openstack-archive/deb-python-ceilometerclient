@@ -22,8 +22,8 @@ import argparse
 import functools
 import json
 
-from oslo.serialization import jsonutils
-from oslo.utils import strutils
+from oslo_serialization import jsonutils
+from oslo_utils import strutils
 import six
 
 from ceilometerclient.common import utils
@@ -170,9 +170,9 @@ def _do_sample_list(cc, args):
            help='ID (aka message ID) of the sample to show.')
 def do_sample_show(cc, args):
     '''Show an sample.'''
-    sample = cc.new_samples.get(args.sample_id)
-
-    if sample is None:
+    try:
+        sample = cc.new_samples.get(args.sample_id)
+    except exc.HTTPNotFound:
         raise exc.CommandError('Sample not found: %s' % args.sample_id)
 
     fields = ['id', 'meter', 'volume', 'type', 'unit', 'source',
@@ -231,7 +231,12 @@ def do_sample_create(cc, args={}):
         k, v = var[0], var[1]
         if v is not None:
             if k == 'resource_metadata':
-                fields[k] = json.loads(v)
+                try:
+                    fields[k] = json.loads(v)
+                except ValueError:
+                    msg = ('Invalid resource metadata, it should be a json'
+                           ' string, like: \'{"foo":"bar"}\'')
+                    raise exc.CommandError(msg)
             else:
                 fields[arg_to_field_mapping.get(k, k)] = v
     sample = cc.samples.create(**fields)
@@ -256,6 +261,19 @@ def do_meter_list(cc, args={}):
               'project_id']
     utils.print_list(meters, fields, field_labels,
                      sortby=0)
+
+
+@utils.arg('samples_list', metavar='<SAMPLES_LIST>', action=NotEmptyAction,
+           help='Json array with samples to create.')
+def do_sample_create_list(cc, args={}):
+    """Create a sample list."""
+    sample_list_array = json.loads(args.samples_list)
+    samples = cc.samples.create_list(sample_list_array)
+    field_labels = ['Resource ID', 'Name', 'Type', 'Volume', 'Unit',
+                    'Timestamp']
+    fields = ['resource_id', 'counter_name', 'counter_type',
+              'counter_volume', 'counter_unit', 'timestamp']
+    utils.print_list(samples, fields, field_labels, sortby=None)
 
 
 def _display_alarm_list(alarms, sortby=None):
@@ -405,6 +423,8 @@ def _display_alarm(alarm):
 def do_alarm_show(cc, args={}):
     """Show an alarm."""
     alarm = cc.alarms.get(args.alarm_id)
+    # alarm.get actually catches the HTTPNotFound exception and turns the
+    # result into None if the alarm wasn't found.
     if alarm is None:
         raise exc.CommandError('Alarm not found: %s' % args.alarm_id)
     else:
@@ -1046,8 +1066,12 @@ def do_event_list(cc, args={}):
            help='The ID of the event. Should be a UUID.')
 def do_event_show(cc, args={}):
     """Show a particular event."""
-    event = cc.events.get(args.message_id)
-    fields = ['event_type', 'generated', 'traits']
+    try:
+        event = cc.events.get(args.message_id)
+    except exc.HTTPNotFound:
+        raise exc.CommandError('Event not found: %s' % args.message_id)
+
+    fields = ['event_type', 'generated', 'traits', 'raw']
     data = dict([(f, getattr(event, f, '')) for f in fields])
     utils.print_dict(data, wrap=72)
 
