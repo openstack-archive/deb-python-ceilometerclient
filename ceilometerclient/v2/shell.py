@@ -169,7 +169,7 @@ def _do_sample_list(cc, args):
 @utils.arg('sample_id', metavar='<SAMPLE_ID>', action=NotEmptyAction,
            help='ID (aka message ID) of the sample to show.')
 def do_sample_show(cc, args):
-    '''Show an sample.'''
+    '''Show a sample.'''
     try:
         sample = cc.new_samples.get(args.sample_id)
     except exc.HTTPNotFound:
@@ -216,6 +216,8 @@ def _restore_shadowed_arg(shadowed, observed):
                 'key-value pairs e.g. {"key":"value"}.')
 @utils.arg('--timestamp', metavar='<TIMESTAMP>',
            help='The sample timestamp.')
+@utils.arg('--direct', metavar='<DIRECT>', default=False,
+           help='Post sample to storage directly.')
 @_restore_shadowed_arg('project_id', 'sample_project_id')
 @_restore_shadowed_arg('user_id', 'sample_user_id')
 def do_sample_create(cc, args={}):
@@ -265,10 +267,12 @@ def do_meter_list(cc, args={}):
 
 @utils.arg('samples_list', metavar='<SAMPLES_LIST>', action=NotEmptyAction,
            help='Json array with samples to create.')
+@utils.arg('--direct', metavar='<DIRECT>', default=False,
+           help='Post samples to storage directly.')
 def do_sample_create_list(cc, args={}):
     """Create a sample list."""
     sample_list_array = json.loads(args.samples_list)
-    samples = cc.samples.create_list(sample_list_array)
+    samples = cc.samples.create_list(sample_list_array, direct=args.direct)
     field_labels = ['Resource ID', 'Name', 'Type', 'Volume', 'Unit',
                     'Timestamp']
     fields = ['resource_id', 'counter_name', 'counter_type',
@@ -353,7 +357,7 @@ def alarm_change_detail_formatter(change):
     if change.type == 'state transition':
         fields.append('state: %s' % detail['state'])
     elif change.type == 'creation' or change.type == 'deletion':
-        for k in ['name', 'description', 'type', 'rule']:
+        for k in ['name', 'description', 'type', 'rule', 'severity']:
             if k == 'rule':
                 fields.append('rule: %s' % _display_rule(detail['type'],
                                                          detail[k]))

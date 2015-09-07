@@ -37,6 +37,7 @@ from ceilometerclient.v2 import shell as ceilometer_shell
 from ceilometerclient.v2 import statistics
 from ceilometerclient.v2 import trait_descriptions
 from ceilometerclient.v2 import traits
+from keystoneclient import exceptions
 
 
 class ShellAlarmStateCommandsTest(utils.BaseTestCase):
@@ -80,6 +81,7 @@ class ShellAlarmHistoryCommandTest(utils.BaseTestCase):
                    '"ok_actions": [], '
                    '"project_id": "57d04f24d0824b78b1ea9bcecedbda8f", '
                    '"type": "combination", '
+                   '"severity": "low", '
                    '"description": "Combined state of alarms '
                    '062cc907-3a9f-4867-ab3b-fa83212b39f7"}')
     ALARM_HISTORY = [{'on_behalf_of': '57d04f24d0824b78b1ea9bcecedbda8f',
@@ -617,7 +619,8 @@ class ShellSampleCreateListCommandTest(utils.BaseTestCase):
                                          sample) for sample in self.samples]
         self.cc.samples.create_list.return_value = ret_samples
         ceilometer_shell.do_sample_create_list(self.cc, self.args)
-        self.cc.samples.create_list.assert_called_with(self.samples)
+        self.cc.samples.create_list.assert_called_with(self.samples,
+                                                       direct=mock.ANY)
         self.assertEqual('''\
 +--------------------------------------+-------+------------+--------+-------\
 +----------------------------+
@@ -1230,7 +1233,10 @@ class ShellShadowedArgsTest(test_shell.ShellTestBase):
             '--user-id', 'the-user-id-i-want-to-set',
             '--name', 'project-id-test'] + args
         with mock.patch.object(alarms.AlarmManager, method) as mocked:
-            base_shell.main(cli_args)
+            with mock.patch('ceilometerclient.client.AuthPlugin.'
+                            'redirect_to_aodh_endpoint') as redirect_aodh:
+                redirect_aodh.site_effect = exceptions.EndpointNotFound
+                base_shell.main(cli_args)
         args, kwargs = mocked.call_args
         self.assertEqual('the-project-id-i-want-to-set',
                          kwargs.get('project_id'))
@@ -1271,7 +1277,10 @@ class ShellShadowedArgsTest(test_shell.ShellTestBase):
             '--meter-unit', 'ns',
             '--sample-volume', '10086',
         ]
-        base_shell.main(cli_args)
+        with mock.patch('ceilometerclient.client.AuthPlugin.'
+                        'redirect_to_aodh_endpoint') as redirect_aodh:
+            redirect_aodh.site_effect = exceptions.EndpointNotFound
+            base_shell.main(cli_args)
         args, kwargs = mocked.call_args
         self.assertEqual('the-project-id-i-want-to-set',
                          kwargs.get('project_id'))
