@@ -254,9 +254,12 @@ def do_sample_create(cc, args={}):
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
+@utils.arg('-l', '--limit', metavar='<NUMBER>',
+           help='Maximum number of meters to return.')
 def do_meter_list(cc, args={}):
     """List the user's meters."""
-    meters = cc.meters.list(q=options.cli_to_array(args.query))
+    meters = cc.meters.list(q=options.cli_to_array(args.query),
+                            limit=args.limit)
     field_labels = ['Name', 'Type', 'Unit', 'Resource ID', 'User ID',
                     'Project ID']
     fields = ['name', 'type', 'unit', 'resource_id', 'user_id',
@@ -482,6 +485,11 @@ def common_alarm_arguments(create=False):
                          'name=<CONSTRAINT_NAME>;start=<CRON>;'
                          'duration=<SECONDS>;[description=<DESCRIPTION>;'
                          '[timezone=<IANA Timezone>]]'))
+        @utils.arg('--repeat-actions', dest='repeat_actions',
+                   metavar='{True|False}', type=strutils.bool_from_string,
+                   default=False,
+                   help=('True if actions should be repeatedly notified '
+                         'while alarm remains in target state.'))
         @functools.wraps(func)
         def _wrapped(*args, **kwargs):
             return func(*args, **kwargs)
@@ -509,11 +517,6 @@ def common_alarm_gnocchi_arguments(rule_namespace, create=False):
                    dest=rule_namespace + '/threshold',
                    required=create,
                    help='Threshold to evaluate against.')
-        @utils.arg('--repeat-actions', dest='repeat_actions',
-                   metavar='{True|False}', type=strutils.bool_from_string,
-                   default=False,
-                   help=('True if actions should be repeatedly notified '
-                         'while alarm remains in target state.'))
         @functools.wraps(func)
         def _wrapped(*args, **kwargs):
             return func(*args, **kwargs)
@@ -580,6 +583,22 @@ def common_alarm_gnocchi_resources_arguments(create=False):
     return _wrapper
 
 
+def common_alarm_event_arguments():
+    def _wrapper(func):
+        @utils.arg('--event-type', dest='event_rule/event_type',
+                   metavar='<EVENT_TYPE>',
+                   help='Event type for event alarm.')
+        @utils.arg('-q', '--query', dest='event_rule/query', metavar='<QUERY>',
+                   help=('key[op]data_type::value; list for filtering events. '
+                         'data_type is optional, but if supplied must be '
+                         'string, integer, float or datetime.'))
+        @functools.wraps(func)
+        def _wrapped(*args, **kwargs):
+            return func(*args, **kwargs)
+        return _wrapped
+    return _wrapper
+
+
 @common_alarm_arguments(create=True)
 @utils.arg('--period', type=int, metavar='<PERIOD>',
            help='Length of each period (seconds) to evaluate over.')
@@ -598,11 +617,6 @@ def common_alarm_gnocchi_resources_arguments(create=False):
            metavar='<Matching Metadata>', action='append', default=None,
            help=('A meter should match this resource metadata (key=value) '
                  'additionally to the meter_name.'))
-@utils.arg('--repeat-actions', dest='repeat_actions',
-           metavar='{True|False}', type=strutils.bool_from_string,
-           default=False,
-           help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state.'))
 @_restore_shadowed_arg('project_id', 'alarm_project_id')
 @_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_create(cc, args={}):
@@ -680,11 +694,6 @@ def do_alarm_gnocchi_aggregation_by_resources_threshold_create(cc, args={}):
            dest='threshold_rule/query',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
-@utils.arg('--repeat-actions', dest='repeat_actions',
-           metavar='{True|False}', type=strutils.bool_from_string,
-           default=False,
-           help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state.'))
 @_restore_shadowed_arg('project_id', 'alarm_project_id')
 @_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_threshold_create(cc, args={}):
@@ -708,11 +717,6 @@ def do_alarm_threshold_create(cc, args={}):
            dest='combination_rule/operator',
            help='Operator to compare with, one of: ' + str(
                ALARM_COMBINATION_OPERATORS) + '.')
-@utils.arg('--repeat-actions', dest='repeat_actions',
-           metavar='{True|False}', type=strutils.bool_from_string,
-           default=False,
-           help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state.'))
 @_restore_shadowed_arg('project_id', 'alarm_project_id')
 @_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_combination_create(cc, args={}):
@@ -721,6 +725,23 @@ def do_alarm_combination_create(cc, args={}):
     fields = utils.args_array_to_list_of_dicts(fields, 'time_constraints')
     fields = utils.key_with_slash_to_nested_dict(fields)
     fields['type'] = 'combination'
+    alarm = cc.alarms.create(**fields)
+    _display_alarm(alarm)
+
+
+@common_alarm_arguments(create=True)
+@common_alarm_event_arguments()
+@_restore_shadowed_arg('project_id', 'alarm_project_id')
+@_restore_shadowed_arg('user_id', 'alarm_user_id')
+def do_alarm_event_create(cc, args={}):
+    """Create a new alarm based on events."""
+    fields = dict(filter(lambda x: x[1] is not None, vars(args).items()))
+    fields = utils.key_with_slash_to_nested_dict(fields)
+    fields['type'] = 'event'
+    fields['event_rule'] = fields.get('event_rule', {})
+    if 'query' in fields['event_rule']:
+        fields['event_rule']['query'] = options.cli_to_array(
+            fields['event_rule']['query'])
     alarm = cc.alarms.create(**fields)
     _display_alarm(alarm)
 
@@ -752,10 +773,6 @@ def do_alarm_combination_create(cc, args={}):
            metavar='<Matching Metadata>', action='append', default=None,
            help=('A meter should match this resource metadata (key=value) '
                  'additionally to the meter_name.'))
-@utils.arg('--repeat-actions', dest='repeat_actions',
-           metavar='{True|False}', type=strutils.bool_from_string,
-           help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state.'))
 @_restore_shadowed_arg('project_id', 'alarm_project_id')
 @_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_update(cc, args={}):
@@ -805,10 +822,6 @@ def do_alarm_update(cc, args={}):
            dest='threshold_rule/query',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
-@utils.arg('--repeat-actions', dest='repeat_actions',
-           metavar='{True|False}', type=strutils.bool_from_string,
-           help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state.'))
 @_restore_shadowed_arg('project_id', 'alarm_project_id')
 @_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_threshold_update(cc, args={}):
@@ -925,10 +938,6 @@ def do_alarm_gnocchi_aggregation_by_resources_threshold_update(cc, args={}):
            dest='combination_rule/operator',
            help='Operator to compare with, one of: ' + str(
                ALARM_COMBINATION_OPERATORS) + '.')
-@utils.arg('--repeat-actions', dest='repeat_actions',
-           metavar='{True|False}', type=strutils.bool_from_string,
-           help=('True if actions should be repeatedly notified '
-                 'while alarm remains in target state.'))
 @_restore_shadowed_arg('project_id', 'alarm_project_id')
 @_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_combination_update(cc, args={}):
@@ -938,6 +947,31 @@ def do_alarm_combination_update(cc, args={}):
     fields = utils.key_with_slash_to_nested_dict(fields)
     fields.pop('alarm_id')
     fields['type'] = 'combination'
+    try:
+        alarm = cc.alarms.update(args.alarm_id, **fields)
+    except exc.HTTPNotFound:
+        raise exc.CommandError('Alarm not found: %s' % args.alarm_id)
+    _display_alarm(alarm)
+
+
+@utils.arg('-a', '--alarm_id', metavar='<ALARM_ID>',
+           action=obsoleted_by('alarm_id'), help=argparse.SUPPRESS,
+           dest='alarm_id_deprecated')
+@utils.arg('alarm_id', metavar='<ALARM_ID>', nargs='?',
+           action=NotEmptyAction, help='ID of the alarm to update.')
+@common_alarm_arguments()
+@common_alarm_event_arguments()
+@_restore_shadowed_arg('project_id', 'alarm_project_id')
+@_restore_shadowed_arg('user_id', 'alarm_user_id')
+def do_alarm_event_update(cc, args={}):
+    """Update an existing alarm based on events."""
+    fields = dict(filter(lambda x: x[1] is not None, vars(args).items()))
+    fields = utils.key_with_slash_to_nested_dict(fields)
+    fields.pop('alarm_id')
+    fields['type'] = 'event'
+    if fields.get('event_rule') and 'query' in fields['event_rule']:
+        fields['event_rule']['query'] = options.cli_to_array(
+            fields['event_rule']['query'])
     try:
         alarm = cc.alarms.update(args.alarm_id, **fields)
     except exc.HTTPNotFound:
@@ -1019,9 +1053,12 @@ def do_alarm_history(cc, args={}):
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
+@utils.arg('-l', '--limit', metavar='<NUMBER>',
+           help='Maximum number of resources to return.')
 def do_resource_list(cc, args={}):
     """List the resources."""
-    resources = cc.resources.list(q=options.cli_to_array(args.query))
+    resources = cc.resources.list(q=options.cli_to_array(args.query),
+                                  limit=args.limit)
 
     field_labels = ['Resource ID', 'Source', 'User ID', 'Project ID']
     fields = ['resource_id', 'source', 'user_id', 'project_id']
@@ -1050,9 +1087,12 @@ def do_resource_show(cc, args={}):
                 'or datetime.')
 @utils.arg('--no-traits', dest='no_traits', action='store_true',
            help='If specified, traits will not be printed.')
+@utils.arg('-l', '--limit', metavar='<NUMBER>',
+           help='Maximum number of events to return.')
 def do_event_list(cc, args={}):
     """List events."""
-    events = cc.events.list(q=options.cli_to_array(args.query))
+    events = cc.events.list(q=options.cli_to_array(args.query),
+                            limit=args.limit)
     field_labels = ['Message ID', 'Event Type', 'Generated', 'Traits']
     fields = ['message_id', 'event_type', 'generated', 'traits']
     if args.no_traits:
