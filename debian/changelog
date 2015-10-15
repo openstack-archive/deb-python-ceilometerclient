@@ -1,6 +1,7 @@
 python-ceilometerclient (1.5.0-2) unstable; urgency=medium
 
   * Uploading to unstable.
+  * Re-enable Python 3.5 testing, as it now works.
 
  -- Thomas Goirand <zigo@debian.org>  Thu, 15 Oct 2015 21:32:45 +0000
 
