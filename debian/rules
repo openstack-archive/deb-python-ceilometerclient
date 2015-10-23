@@ -24,6 +24,9 @@ override_dh_install:
 	mv $(CURDIR)/debian/python-ceilometerclient/usr/bin/ceilometer $(CURDIR)/debian/python-ceilometerclient/usr/bin/python2-ceilometer
 	mv $(CURDIR)/debian/python3-ceilometerclient/usr/bin/ceilometer $(CURDIR)/debian/python3-ceilometerclient/usr/bin/python3-ceilometer
 
+override_dh_python3:
+	dh_python3 --shebang=/usr/bin/python3
+
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	@echo "===> Running tests"
