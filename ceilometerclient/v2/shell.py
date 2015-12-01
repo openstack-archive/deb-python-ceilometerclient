@@ -25,6 +25,7 @@ import json
 from oslo_serialization import jsonutils
 from oslo_utils import strutils
 import six
+from six import moves
 
 from ceilometerclient.common import utils
 from ceilometerclient import exc
@@ -36,6 +37,11 @@ ALARM_SEVERITY = ['low', 'moderate', 'critical']
 ALARM_OPERATORS = ['lt', 'le', 'eq', 'ne', 'ge', 'gt']
 ALARM_COMBINATION_OPERATORS = ['and', 'or']
 STATISTICS = ['max', 'min', 'avg', 'sum', 'count']
+GNOCCHI_AGGREGATION = ['last', 'min', 'median', 'sum',
+                       'std', 'first', 'mean', 'count',
+                       'moving-average', 'max']
+GNOCCHI_AGGREGATION.extend(['%spct' % num for num in moves.xrange(1, 100)])
+
 AGGREGATES = {'avg': 'Avg',
               'count': 'Count',
               'max': 'Max',
@@ -196,11 +202,11 @@ def _restore_shadowed_arg(shadowed, observed):
 @utils.arg('--project-id', metavar='<SAMPLE_PROJECT_ID>',
            dest='sample_project_id',
            help='Tenant to associate with sample '
-                '(only settable by admin users).')
+                '(configurable by admin users only).')
 @utils.arg('--user-id', metavar='<SAMPLE_USER_ID>',
            dest='sample_user_id',
            help='User to associate with sample '
-                '(only settable by admin users).')
+                '(configurable by admin users only).')
 @utils.arg('-r', '--resource-id', metavar='<RESOURCE_ID>', required=True,
            help='ID of the resource.')
 @utils.arg('-m', '--meter-name', metavar='<METER_NAME>', required=True,
@@ -299,11 +305,12 @@ def _display_alarm_list(alarms, sortby=None):
 
 def _display_rule(type, rule):
     if type == 'threshold':
-        return ('%(meter_name)s %(comparison_operator)s '
+        return ('%(statistic)s(%(meter_name)s) %(comparison_operator)s '
                 '%(threshold)s during %(evaluation_periods)s x %(period)ss' %
                 {
                     'meter_name': rule['meter_name'],
                     'threshold': rule['threshold'],
+                    'statistic': rule['statistic'],
                     'evaluation_periods': rule['evaluation_periods'],
                     'period': rule['period'],
                     'comparison_operator': OPERATORS_STRING.get(
@@ -445,11 +452,11 @@ def common_alarm_arguments(create=False):
         @utils.arg('--project-id', metavar='<ALARM_PROJECT_ID>',
                    dest='alarm_project_id',
                    help='Tenant to associate with alarm '
-                   '(only settable by admin users).')
+                   '(configurable by admin users only).')
         @utils.arg('--user-id', metavar='<ALARM_USER_ID>',
                    dest='alarm_user_id',
                    help='User to associate with alarm '
-                   '(only settable by admin users).')
+                   '(configurable by admin users only).')
         @utils.arg('--description', metavar='<DESCRIPTION>',
                    help='Free text description of the alarm.')
         @utils.arg('--state', metavar='<STATE>',
@@ -508,7 +515,7 @@ def common_alarm_gnocchi_arguments(rule_namespace, create=False):
         @utils.arg('--aggregation-method', metavar='<AGGREATION>',
                    dest=rule_namespace + '/aggregation_method',
                    help=('Aggregation method to use, one of: ' +
-                         str(STATISTICS) + '.'))
+                         str(GNOCCHI_AGGREGATION) + '.'))
         @utils.arg('--comparison-operator', metavar='<OPERATOR>',
                    dest=rule_namespace + '/comparison_operator',
                    help=('Operator to compare with, one of: ' +
@@ -528,7 +535,7 @@ def common_alarm_gnocchi_aggregation_by_metrics_arguments(create=False):
     def _wrapper(func):
         @utils.arg('-m', '--metrics', metavar='<METRICS>',
                    dest=('gnocchi_aggregation_by_metrics_threshold_rule/'
-                         'meter_name'),
+                         'metrics'),
                    action='append', required=create,
                    help='Metric to evaluate against.')
         @functools.wraps(func)
@@ -1053,11 +1060,14 @@ def do_alarm_history(cc, args={}):
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
+@utils.arg('--meter-links', dest='meter_links', action='store_true',
+           help='If specified, meter links will be generated.')
 @utils.arg('-l', '--limit', metavar='<NUMBER>',
            help='Maximum number of resources to return.')
 def do_resource_list(cc, args={}):
     """List the resources."""
     resources = cc.resources.list(q=options.cli_to_array(args.query),
+                                  links=args.meter_links,
                                   limit=args.limit)
 
     field_labels = ['Resource ID', 'Source', 'User ID', 'Project ID']
@@ -1170,9 +1180,9 @@ def do_query_samples(cc, args):
     except exc.HTTPNotFound:
         raise exc.CommandError('Samples not found')
     else:
-        field_labels = ['Resource ID', 'Meter', 'Type', 'Volume', 'Unit',
-                        'Timestamp']
-        fields = ['resource_id', 'meter', 'type',
+        field_labels = ['ID', 'Resource ID', 'Meter', 'Type', 'Volume',
+                        'Unit', 'Timestamp']
+        fields = ['id', 'resource_id', 'meter', 'type',
                   'volume', 'unit', 'timestamp']
         utils.print_list(samples, fields, field_labels,
                          sortby=None)
