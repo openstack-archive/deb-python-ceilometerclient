@@ -12,6 +12,7 @@
 
 import types
 
+from keystoneauth1 import exceptions as ka_exc
 from keystoneclient.auth.identity import v2 as v2_auth
 from keystoneclient.auth.identity import v3 as v3_auth
 from keystoneclient import exceptions as ks_exc
@@ -46,7 +47,7 @@ class ClientTest(utils.BaseTestCase):
         if not env.get('auth_plugin'):
             with mock.patch('ceilometerclient.client.AuthPlugin.'
                             'redirect_to_aodh_endpoint') as redirect_aodh:
-                redirect_aodh.side_effect = ks_exc.EndpointNotFound
+                redirect_aodh.side_effect = ka_exc.EndpointNotFound
                 return client.get_client(api_version, **env)
         else:
             env['auth_plugin'].redirect_to_aodh_endpoint.side_effect = \
@@ -377,6 +378,17 @@ class ClientAuthTest(utils.BaseTestCase):
         self.create_client(env)
         session_instance_mock.get_endpoint.assert_called_with(
             region_name=None, interface='publicURL', service_type='alarming')
+
+    def test_http_client_with_session(self):
+        session = mock.Mock()
+        session.request.return_value = mock.Mock(status_code=404,
+                                                 text=b'')
+
+        env = {"session": session,
+               "service_type": "metering",
+               "user_agent": "python-ceilometerclient"}
+        c = client.SessionClient(**env)
+        self.assertRaises(exc.HTTPException, c.get, "/")
 
     def test_get_aodh_endpoint_without_auth_url(self):
         env = FAKE_ENV.copy()

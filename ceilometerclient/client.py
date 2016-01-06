@@ -331,7 +331,9 @@ def _adjust_kwargs(kwargs):
     }
 
     client_kwargs.update(kwargs)
-    client_kwargs['token'] = kwargs.get('token') or kwargs.get('auth_token')
+    client_kwargs['token'] = (client_kwargs.get('token') or
+                              kwargs.get('token') or
+                              kwargs.get('auth_token'))
 
     timeout = kwargs.get('timeout')
     if timeout is not None:
@@ -367,7 +369,7 @@ def Client(version, *args, **kwargs):
 def get_client(version, **kwargs):
     """Get an authenticated client, based on the credentials in the kwargs.
 
-    :param api_version: the API version to use ('1' or '2')
+    :param version: the API version to use ('1' or '2')
     :param kwargs: keyword args containing credentials, either:
 
             * session: a keystoneauth/keystoneclient session object
@@ -456,9 +458,9 @@ def _construct_http_client(**kwargs):
 
         return SessionClient(
             session=kwargs.pop('session'),
-            service_type=kwargs.pop('service_type', 'metering'),
-            interface=(kwargs.pop('interface', None) or
-                       kwargs.pop('endpoint_type', 'publicURL')),
+            service_type=kwargs.pop('service_type', 'metering') or 'metering',
+            interface=kwargs.pop('interface', kwargs.pop('endpoint_type',
+                                                         'publicURL')),
             region_name=kwargs.pop('region_name', None),
             user_agent=kwargs.pop('user_agent', 'python-ceilometerclient'),
             auth=kwargs.get('auth', None),
@@ -508,10 +510,9 @@ class SessionClient(adapter.LegacyJsonAdapter):
         super(SessionClient, self).__init__(*args, **kwargs)
 
     def request(self, url, method, **kwargs):
-        self.session.request(url, method)
         kwargs.setdefault('headers', kwargs.get('headers', {}))
         # NOTE(sileht): The standard call raises errors from
-        # keystoneauth, where we need to raise the gnocchiclient errors.
+        # keystoneauth, where we need to raise the ceilometerclient errors.
         raise_exc = kwargs.pop('raise_exc', True)
         with record_time(self.times, self.timings, method, url):
             resp, body = super(SessionClient, self).request(url,
