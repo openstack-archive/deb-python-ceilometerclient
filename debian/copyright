@@ -2,12 +2,26 @@ Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: python-ceilometerclient
 Source: git://github.com/asalkeld/python-ceilometerclient.git
 
-Files: debian/*
-Copyright: 2012 Thomas Goirand <zigo@debian.org>
+Files: *
+Copyright: (c) 2012-2016, Openstack Foundation <openstack-dev@lists.openstack.org>
+           (c) 2013, Hewlett-Packard Development Company, L.P.
+           (c) 2013, IBM Corp.
+           (c) 2012-2016, Red Hat, Inc.
+           (c) 2014-2015, Huawei.
+           (c) 2011, Piston Cloud Computing, Inc.
+           (c) 2012, Intel Corporation.
+           (c) 2010, NASA
+           (c) 2012-2013, Grid Dynamics
+           (c) 2013, Alessio Ababilov
+           (c) 2010, Jacob Kaplan-Moss
+           (c) 2013, Spanish National Research Council.
+           (c) 2011, Nebula, Inc.
+           (c) 2014, Ericsson
+           (c) 2013, eNovance
 License: Apache-2
 
-Files: *
-Copyright: 2012, Openstack LLC
+Files: debian/*
+Copyright: (c) 2012-2016, Thomas Goirand <zigo@debian.org>
 License: Apache-2
 
 License: Apache-2
