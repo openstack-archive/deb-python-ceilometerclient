@@ -1,3 +1,9 @@
+python-ceilometerclient (2.2.1-1) experimental; urgency=medium
+
+  * New upstream release.
+
+ -- Thomas Goirand <zigo@debian.org>  Sat, 16 Jan 2016 05:22:43 +0000
+
 python-ceilometerclient (2.1.0-1) experimental; urgency=medium
 
   [ David Della Vecchia ]
