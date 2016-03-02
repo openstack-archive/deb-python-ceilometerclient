@@ -12,6 +12,7 @@ python-ceilometerclient (2.3.0-1) UNRELEASED; urgency=medium
 
   [ Ondřej Nový ]
   * Fixed typos in package description.
+  * Added more Debian tests.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Wed, 02 Mar 2016 10:43:20 -0500
 
