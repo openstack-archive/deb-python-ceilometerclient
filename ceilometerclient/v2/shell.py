@@ -56,6 +56,10 @@ ORDER_DIRECTIONS = ['asc', 'desc']
 COMPLEX_OPERATORS = ['and', 'or']
 SIMPLE_OPERATORS = ["=", "!=", "<", "<=", '>', '>=']
 
+DEFAULT_API_LIMIT = ('API server limits result to <default_api_return_limit> '
+                     'rows if no limit provided. Option is configured in '
+                     'ceilometer.conf [api] group')
+
 
 class NotEmptyAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
@@ -134,7 +138,7 @@ def do_statistics(cc, args):
 @utils.arg('-m', '--meter', metavar='<NAME>',
            action=NotEmptyAction, help='Name of meter to show samples for.')
 @utils.arg('-l', '--limit', metavar='<NUMBER>',
-           help='Maximum number of samples to return.')
+           help='Maximum number of samples to return. %s' % DEFAULT_API_LIMIT)
 def do_sample_list(cc, args):
     """List the samples (return OldSample objects if -m/--meter is set)."""
     if not args.meter:
@@ -261,7 +265,7 @@ def do_sample_create(cc, args={}):
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
 @utils.arg('-l', '--limit', metavar='<NUMBER>',
-           help='Maximum number of meters to return.')
+           help='Maximum number of meters to return. %s' % DEFAULT_API_LIMIT)
 def do_meter_list(cc, args={}):
     """List the user's meters."""
     meters = cc.meters.list(q=options.cli_to_array(args.query),
@@ -640,6 +644,8 @@ def do_alarm_create(cc, args={}):
 @common_alarm_gnocchi_arguments('gnocchi_resources_threshold_rule',
                                 create=True)
 @common_alarm_gnocchi_resources_arguments(create=True)
+@_restore_shadowed_arg('project_id', 'alarm_project_id')
+@_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_gnocchi_resources_threshold_create(cc, args={}):
     """Create a new alarm based on computed statistics."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
@@ -654,6 +660,8 @@ def do_alarm_gnocchi_resources_threshold_create(cc, args={}):
 @common_alarm_gnocchi_arguments(
     'gnocchi_aggregation_by_metrics_threshold_rule', create=True)
 @common_alarm_gnocchi_aggregation_by_metrics_arguments(create=True)
+@_restore_shadowed_arg('project_id', 'alarm_project_id')
+@_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_gnocchi_aggregation_by_metrics_threshold_create(cc, args={}):
     """Create a new alarm based on computed statistics."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
@@ -668,6 +676,8 @@ def do_alarm_gnocchi_aggregation_by_metrics_threshold_create(cc, args={}):
 @common_alarm_gnocchi_arguments(
     'gnocchi_aggregation_by_resources_threshold_rule', create=True)
 @common_alarm_gnocchi_aggregation_by_resources_arguments(create=True)
+@_restore_shadowed_arg('project_id', 'alarm_project_id')
+@_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_gnocchi_aggregation_by_resources_threshold_create(cc, args={}):
     """Create a new alarm based on computed statistics."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
@@ -861,6 +871,8 @@ def do_alarm_threshold_update(cc, args={}):
            metavar='<Constraint names>',
            dest='remove_time_constraints',
            help='Name or list of names of the time constraints to remove.')
+@_restore_shadowed_arg('project_id', 'alarm_project_id')
+@_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_gnocchi_resources_threshold_update(cc, args={}):
     """Update an existing alarm based on computed statistics."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
@@ -888,6 +900,8 @@ def do_alarm_gnocchi_resources_threshold_update(cc, args={}):
            metavar='<Constraint names>',
            dest='remove_time_constraints',
            help='Name or list of names of the time constraints to remove.')
+@_restore_shadowed_arg('project_id', 'alarm_project_id')
+@_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_gnocchi_aggregation_by_metrics_threshold_update(cc, args={}):
     """Update an existing alarm based on computed statistics."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
@@ -915,6 +929,8 @@ def do_alarm_gnocchi_aggregation_by_metrics_threshold_update(cc, args={}):
            metavar='<Constraint names>',
            dest='remove_time_constraints',
            help='Name or list of names of the time constraints to remove.')
+@_restore_shadowed_arg('project_id', 'alarm_project_id')
+@_restore_shadowed_arg('user_id', 'alarm_user_id')
 def do_alarm_gnocchi_aggregation_by_resources_threshold_update(cc, args={}):
     """Update an existing alarm based on computed statistics."""
     fields = dict(filter(lambda x: not (x[1] is None), vars(args).items()))
@@ -1061,14 +1077,12 @@ def do_alarm_history(cc, args={}):
 @utils.arg('-q', '--query', metavar='<QUERY>',
            help='key[op]data_type::value; list. data_type is optional, '
                 'but if supplied must be string, integer, float, or boolean.')
-@utils.arg('--meter-links', dest='meter_links', action='store_true',
-           help='If specified, meter links will be generated.')
 @utils.arg('-l', '--limit', metavar='<NUMBER>',
-           help='Maximum number of resources to return.')
+           help='Maximum number of resources to return. %s' %
+           DEFAULT_API_LIMIT)
 def do_resource_list(cc, args={}):
     """List the resources."""
     resources = cc.resources.list(q=options.cli_to_array(args.query),
-                                  links=args.meter_links,
                                   limit=args.limit)
 
     field_labels = ['Resource ID', 'Source', 'User ID', 'Project ID']
@@ -1099,7 +1113,7 @@ def do_resource_show(cc, args={}):
 @utils.arg('--no-traits', dest='no_traits', action='store_true',
            help='If specified, traits will not be printed.')
 @utils.arg('-l', '--limit', metavar='<NUMBER>',
-           help='Maximum number of events to return.')
+           help='Maximum number of events to return. %s' % DEFAULT_API_LIMIT)
 def do_event_list(cc, args={}):
     """List events."""
     events = cc.events.list(q=options.cli_to_array(args.query),
@@ -1170,7 +1184,7 @@ def do_trait_list(cc, args={}):
            help=('[{field_name: direction}, {field_name: direction}] '
                  'The direction is one of: ' + str(ORDER_DIRECTIONS) + '.'))
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
-           help='Maximum number of samples to return.')
+           help='Maximum number of samples to return. %s' % DEFAULT_API_LIMIT)
 def do_query_samples(cc, args):
     """Query samples."""
     fields = {'filter': args.filter,
@@ -1197,7 +1211,7 @@ def do_query_samples(cc, args):
            help=('[{field_name: direction}, {field_name: direction}] '
                  'The direction is one of: ' + str(ORDER_DIRECTIONS) + '.'))
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
-           help='Maximum number of alarms to return.')
+           help='Maximum number of alarms to return. %s' % DEFAULT_API_LIMIT)
 def do_query_alarms(cc, args):
     """Query Alarms."""
     fields = {'filter': args.filter,
@@ -1219,7 +1233,8 @@ def do_query_alarms(cc, args):
            help=('[{field_name: direction}, {field_name: direction}] '
                  'The direction is one of: ' + str(ORDER_DIRECTIONS) + '.'))
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
-           help='Maximum number of alarm history items to return.')
+           help='Maximum number of alarm history items to return. %s' %
+           DEFAULT_API_LIMIT)
 def do_query_alarm_history(cc, args):
     """Query Alarm History."""
     fields = {'filter': args.filter,

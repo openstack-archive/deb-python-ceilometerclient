@@ -15,9 +15,8 @@
 
 from __future__ import print_function
 
-import sys
+import os
 import textwrap
-import uuid
 
 from oslo_serialization import jsonutils
 from oslo_utils import encodeutils
@@ -26,7 +25,6 @@ import prettytable
 import six
 
 from ceilometerclient import exc
-from ceilometerclient.openstack.common import cliutils
 
 
 # Decorator for cli-args
@@ -46,11 +44,22 @@ def arg(*args, **kwargs):
     return _decorator
 
 
-def pretty_choice_list(l):
-    return ', '.join("'%s'" % i for i in l)
+def print_list(objs, fields, field_labels, formatters=None, sortby=0):
+    """Print a list of objects as a table, one row per object.
 
+    :param objs: Iterable of :class:`Resource`
+    :param fields: Attributes that correspond to columns, in order
+    :param field_labels: Labels to use in the heading of the table, default to
+                         fields.
+    :param formatters: `dict` of callables for field formatting
+    :param sortby: Index of the field for sorting table rows
+    """
+    formatters = formatters or {}
 
-def print_list(objs, fields, field_labels, formatters={}, sortby=0):
+    if len(field_labels) != len(fields):
+        raise ValueError(("Field labels list %(labels)s has different number "
+                          "of elements than fields list %(fields)s"),
+                         {'labels': field_labels, 'fields': fields})
 
     def _make_default_formatter(field):
         return lambda o: getattr(o, field, '')
@@ -62,9 +71,25 @@ def print_list(objs, fields, field_labels, formatters={}, sortby=0):
         else:
             new_formatters[field_label] = _make_default_formatter(field)
 
-    cliutils.print_list(objs, field_labels,
-                        formatters=new_formatters,
-                        sortby_index=sortby)
+    kwargs = {} if sortby is None else {'sortby': field_labels[sortby]}
+    pt = prettytable.PrettyTable(field_labels)
+    pt.align = 'l'
+
+    for o in objs:
+        row = []
+        for field in field_labels:
+            if field in new_formatters:
+                row.append(new_formatters[field](o))
+            else:
+                field_name = field.lower().replace(' ', '_')
+                data = getattr(o, field_name, '')
+                row.append(data)
+        pt.add_row(row)
+
+    if six.PY3:
+        print(encodeutils.safe_encode(pt.get_string(**kwargs)).decode())
+    else:
+        print(encodeutils.safe_encode(pt.get_string(**kwargs)))
 
 
 def nested_list_of_dict_formatter(field, column_names):
@@ -89,7 +114,7 @@ def print_dict(d, dict_property="Property", wrap=0):
     pt.align = 'l'
     for k, v in sorted(six.iteritems(d)):
         # convert dict to str to check length
-        if isinstance(v, dict):
+        if isinstance(v, (list, dict)):
             v = jsonutils.dumps(v)
         # if value has a newline, add in multiple rows
         # e.g. fault with stacktrace
@@ -110,31 +135,6 @@ def print_dict(d, dict_property="Property", wrap=0):
     if six.PY3:
         encoded = encoded.decode()
     print(encoded)
-
-
-def find_resource(manager, name_or_id):
-    """Helper for the _find_* methods."""
-    # first try to get entity as integer id
-    try:
-        if isinstance(name_or_id, int) or name_or_id.isdigit():
-            return manager.get(int(name_or_id))
-    except exc.HTTPNotFound:
-        pass
-
-    # now try to get entity as uuid
-    try:
-        uuid.UUID(str(name_or_id))
-        return manager.get(name_or_id)
-    except (ValueError, exc.HTTPNotFound):
-        pass
-
-    # finally try to find entity by name
-    try:
-        return manager.find(name=name_or_id)
-    except exc.HTTPNotFound:
-        msg = "No %s with a name or ID of '%s' exists." % \
-              (manager.resource_class.__name__.lower(), name_or_id)
-        raise exc.CommandError(msg)
 
 
 def import_versioned_module(version, submodule=None):
@@ -197,7 +197,13 @@ def merge_nested_dict(dest, source, depth=0):
             dest[key] = value
 
 
-def exit(msg=''):
-    if msg:
-        print(msg, file=sys.stderr)
-    sys.exit(1)
+def env(*args, **kwargs):
+    """Returns the first environment variable set.
+
+    If all are empty, defaults to '' or keyword arg `default`.
+    """
+    for arg in args:
+        value = os.environ.get(arg)
+        if value:
+            return value
+    return kwargs.get('default', '')
