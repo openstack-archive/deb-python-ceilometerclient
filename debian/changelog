@@ -10,6 +10,9 @@ python-ceilometerclient (2.3.0-1) UNRELEASED; urgency=medium
   [ Corey Bryant ]
   * d/p/skip-tests.patch: Skip failing test that has upstream bug opened.
 
+  [ Ondřej Nový ]
+  * Fixed typos in package description.
+
  -- Corey Bryant <corey.bryant@canonical.com>  Wed, 02 Mar 2016 10:43:20 -0500
 
 python-ceilometerclient (2.2.1-1) experimental; urgency=medium
