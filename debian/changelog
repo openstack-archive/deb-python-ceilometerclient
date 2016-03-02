@@ -5,6 +5,7 @@ python-ceilometerclient (2.3.0-1) UNRELEASED; urgency=medium
 
   [ David Della Vecchia ]
   * New upstream release.
+  * d/control: Align (Build-)Depends with upstream.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Wed, 02 Mar 2016 10:24:09 -0500
 
