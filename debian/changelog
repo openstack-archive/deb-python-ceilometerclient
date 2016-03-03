@@ -1,7 +1,9 @@
-python-ceilometerclient (2.3.0-1) UNRELEASED; urgency=medium
+python-ceilometerclient (2.3.0-1) experimental; urgency=medium
 
   [ Ondřej Nový ]
   * Fixed VCS URLs (https).
+  * Fixed typos in package description.
+  * Added more Debian tests.
 
   [ David Della Vecchia ]
   * New upstream release.
@@ -10,11 +12,10 @@ python-ceilometerclient (2.3.0-1) UNRELEASED; urgency=medium
   [ Corey Bryant ]
   * d/p/skip-tests.patch: Skip failing test that has upstream bug opened.
 
-  [ Ondřej Nový ]
-  * Fixed typos in package description.
-  * Added more Debian tests.
+  [ Thomas Goirand ]
+  * Standards-Version: 3.9.7 (no change).
 
- -- Corey Bryant <corey.bryant@canonical.com>  Wed, 02 Mar 2016 10:43:20 -0500
+ -- Thomas Goirand <zigo@debian.org>  Thu, 03 Mar 2016 03:23:43 +0000
 
 python-ceilometerclient (2.2.1-1) experimental; urgency=medium
 
