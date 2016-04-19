@@ -4,6 +4,8 @@
 #-------------------------
 set -e
 
+cd "$ADTTMP"
+
 HELP_CLIENTS=('ceilometer')
 for client in "${HELP_CLIENTS[@]}"; do
     RET=$($client -h 2>&1 > /dev/null)

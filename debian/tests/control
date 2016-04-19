@@ -2,7 +2,7 @@ Tests: client
 Depends: python-ceilometerclient
 
 Depends: python-ceilometerclient
-Test-Command: python -c "import ceilometerclient; print ceilometerclient.__version__"
+Test-Command: cd "$ADTTMP" ; python -c "import ceilometerclient; print ceilometerclient.__version__"
 
 Depends: python3-ceilometerclient
-Test-Command: python3 -c "import ceilometerclient; print(ceilometerclient.__version__)"
+Test-Command: cd "$ADTTMP" ; python3 -c "import ceilometerclient; print(ceilometerclient.__version__)"
