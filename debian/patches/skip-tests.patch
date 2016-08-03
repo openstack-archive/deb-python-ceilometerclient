@@ -5,7 +5,7 @@ Forwarded: no
 
 --- a/ceilometerclient/tests/unit/v2/test_shell.py
 +++ b/ceilometerclient/tests/unit/v2/test_shell.py
-@@ -529,7 +529,8 @@
+@@ -538,7 +538,8 @@
          ceilometer_shell.\
              do_alarm_gnocchi_aggregation_by_metrics_threshold_create(
                  self.cc, self.args)
@@ -15,7 +15,7 @@ Forwarded: no
  +---------------------------+------------------------------------------\
  --------------------------+
  | Property                  | Value                                    \
-@@ -595,6 +596,8 @@
+@@ -604,6 +605,8 @@
  +---------------------------+------------------------------------------\
  --------------------------+
  ''', sys.stdout.getvalue())
