@@ -7,6 +7,7 @@ python-ceilometerclient (2.5.0-1) UNRELEASED; urgency=medium
 
   [ Corey Bryant ]
   * New upstream release.
+  * .gitreview: Copy from orig tar file.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Wed, 03 Aug 2016 16:20:56 -0400
 
