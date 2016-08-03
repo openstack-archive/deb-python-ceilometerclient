@@ -12,10 +12,10 @@
 
 import types
 
-from keystoneclient.auth.identity import v2 as v2_auth
-from keystoneclient.auth.identity import v3 as v3_auth
-from keystoneclient import exceptions as ks_exc
-from keystoneclient import session as ks_session
+from keystoneauth1 import exceptions as ks_exc
+from keystoneauth1.identity import v2 as v2_auth
+from keystoneauth1.identity import v3 as v3_auth
+from keystoneauth1 import session as ks_session
 import mock
 import requests
 
@@ -228,6 +228,24 @@ class ClientTestWithAodh(ClientTest):
             ceiloclient = client.get_client(2, **env)
             self.assertIsInstance(ceiloclient, v2client.Client)
 
+    @mock.patch('ceilometerclient.client.SessionClient')
+    def test_http_client_with_session_and_aodh(self, mock_sc):
+        session = mock.Mock()
+        kwargs = {"session": session,
+                  "service_type": "metering",
+                  "user_agent": "python-ceilometerclient"}
+        expected = {
+            "auth": None,
+            "interface": 'publicURL',
+            "region_name": None,
+            "timings": None,
+            "session": session,
+            "service_type": "metering",
+            "user_agent": "python-ceilometerclient"}
+        kwargs['aodh_endpoint'] = 'http://aodh.where'
+        client._construct_http_client(**kwargs)
+        mock_sc.assert_called_with(**expected)
+
 
 class ClientAuthTest(utils.BaseTestCase):
 
@@ -240,8 +258,8 @@ class ClientAuthTest(utils.BaseTestCase):
                         return_value=mock.MagicMock()):
             return client.get_client(api_version, **env)
 
-    @mock.patch('keystoneclient.discover.Discover')
-    @mock.patch('keystoneclient.session.Session')
+    @mock.patch('keystoneauth1.discover.Discover')
+    @mock.patch('keystoneauth1.session.Session')
     def test_discover_auth_versions(self, session, discover_mock):
         env = FAKE_ENV.copy()
         env.pop('auth_plugin', None)
@@ -253,13 +271,13 @@ class ClientAuthTest(utils.BaseTestCase):
         client.auth_plugin.opts.pop('token', None)
         client.auth_plugin._do_authenticate(mock.MagicMock())
 
-        self.assertEqual([mock.call(auth_url='http://no.where',
+        self.assertEqual([mock.call(url='http://no.where',
                                     session=mock_session_instance)],
                          discover_mock.call_args_list)
         self.assertIsInstance(mock_session_instance.auth, v3_auth.Password)
 
-    @mock.patch('keystoneclient.discover.Discover')
-    @mock.patch('keystoneclient.session.Session')
+    @mock.patch('keystoneauth1.discover.Discover')
+    @mock.patch('keystoneauth1.session.Session')
     def test_discover_auth_versions_v2_only(self, session, discover):
         env = FAKE_ENV.copy()
         env.pop('auth_plugin', None)
@@ -279,14 +297,14 @@ class ClientAuthTest(utils.BaseTestCase):
         client = self.create_client(env)
         client.auth_plugin.opts.pop('token', None)
         client.auth_plugin._do_authenticate(mock.MagicMock())
-        self.assertEqual([mock.call(auth_url='http://no.where',
+        self.assertEqual([mock.call(url='http://no.where',
                                     session=session_instance_mock)],
                          discover.call_args_list)
 
         self.assertIsInstance(session_instance_mock.auth, v2_auth.Password)
 
-    @mock.patch('keystoneclient.discover.Discover')
-    @mock.patch('keystoneclient.session.Session')
+    @mock.patch('keystoneauth1.discover.Discover')
+    @mock.patch('keystoneauth1.session.Session')
     def test_discover_auth_versions_raise_discovery_failure(self,
                                                             session,
                                                             discover):
@@ -313,9 +331,9 @@ class ClientAuthTest(utils.BaseTestCase):
         self.assertRaises(ks_exc.DiscoveryFailure,
                           client.auth_plugin._do_authenticate,
                           mock.Mock())
-        self.assertEqual([mock.call(auth_url='http://no.where',
+        self.assertEqual([mock.call(url='http://no.where',
                                     session=session_instance_mock),
-                          mock.call(auth_url='http://no.where',
+                          mock.call(url='http://no.where',
                                     session=session_instance_mock)],
                          discover.call_args_list)
 
@@ -351,7 +369,6 @@ class ClientAuthTest(utils.BaseTestCase):
         session = mock.Mock()
         session.request.return_value = mock.Mock(status_code=404,
                                                  text=b'')
-
         env = {"session": session,
                "service_type": "metering",
                "user_agent": "python-ceilometerclient"}

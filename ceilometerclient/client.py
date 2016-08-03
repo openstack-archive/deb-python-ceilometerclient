@@ -13,12 +13,12 @@
 import contextlib
 import time
 
-from keystoneclient import adapter
-from keystoneclient.auth.identity import v2 as v2_auth
-from keystoneclient.auth.identity import v3 as v3_auth
-from keystoneclient import discover
-from keystoneclient import exceptions as ks_exc
-from keystoneclient import session
+from keystoneauth1 import adapter
+from keystoneauth1 import discover
+from keystoneauth1 import exceptions as ka_exc
+from keystoneauth1.identity import v2 as v2_auth
+from keystoneauth1.identity import v3 as v3_auth
+from keystoneauth1 import session
 from oslo_utils import strutils
 import six.moves.urllib.parse as urlparse
 
@@ -35,10 +35,10 @@ def _discover_auth_versions(session, auth_url):
     v2_auth_url = None
     v3_auth_url = None
     try:
-        ks_discover = discover.Discover(session=session, auth_url=auth_url)
+        ks_discover = discover.Discover(session=session, url=auth_url)
         v2_auth_url = ks_discover.url_for('2.0')
         v3_auth_url = ks_discover.url_for('3.0')
-    except ks_exc.DiscoveryFailure:
+    except ka_exc.DiscoveryFailure:
         raise
     except exceptions.ClientException:
         # Identity service may not support discovery. In that case,
@@ -402,6 +402,8 @@ def _construct_http_client(**kwargs):
         # Drop legacy options
         for opt in LEGACY_OPTS:
             kwargs.pop(opt, None)
+        # Drop aodh_endpoint from kwargs
+        kwargs.pop('aodh_endpoint', None)
 
         return SessionClient(
             session=kwargs.pop('session'),
@@ -410,7 +412,7 @@ def _construct_http_client(**kwargs):
                                                          'publicURL')),
             region_name=kwargs.pop('region_name', None),
             user_agent=kwargs.pop('user_agent', 'python-ceilometerclient'),
-            auth=kwargs.get('auth', None),
+            auth=kwargs.get('auth'),
             timings=kwargs.pop('timings', None),
             **kwargs)
     else:

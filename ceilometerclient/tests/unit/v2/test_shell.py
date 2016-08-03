@@ -1,8 +1,5 @@
 # Copyright Ericsson AB 2014. All rights reserved
 #
-# Authors: Balazs Gibizer <balazs.gibizer@ericsson.com>
-#          Ildiko Vancsa <ildiko.vancsa@ericsson.com>
-#
 #   Licensed under the Apache License, Version 2.0 (the "License"); you may
 #   not use this file except in compliance with the License. You may obtain
 #   a copy of the License at
@@ -38,7 +35,7 @@ from ceilometerclient.v2 import shell as ceilometer_shell
 from ceilometerclient.v2 import statistics
 from ceilometerclient.v2 import trait_descriptions
 from ceilometerclient.v2 import traits
-from keystoneclient import exceptions
+from keystoneauth1 import exceptions
 
 
 class ShellAlarmStateCommandsTest(utils.BaseTestCase):
@@ -264,6 +261,18 @@ class ShellAlarmCommandTest(utils.BaseTestCase):
 
     def test_alarm_threshold_update_repeat_actions_clear(self):
         method = ceilometer_shell.do_alarm_threshold_update
+        self._do_test_alarm_update_repeat_actions(method, False)
+
+    def test_alarm_event_upadte_repeat_action_untouched(self):
+        method = ceilometer_shell.do_alarm_event_update
+        self._do_test_alarm_update_repeat_actions(method, None)
+
+    def test_alarm_event_upadte_repeat_action_set(self):
+        method = ceilometer_shell.do_alarm_event_update
+        self._do_test_alarm_update_repeat_actions(method, True)
+
+    def test_alarm_event_upadte_repeat_action_clear(self):
+        method = ceilometer_shell.do_alarm_event_update
         self._do_test_alarm_update_repeat_actions(method, False)
 
     @mock.patch('sys.stdout', new=six.StringIO())

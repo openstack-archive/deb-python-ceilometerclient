@@ -1,8 +1,5 @@
 # Copyright Ericsson AB 2014. All rights reserved
 #
-# Authors: Balazs Gibizer <balazs.gibizer@ericsson.com>
-#          Ildiko Vancsa <ildiko.vancsa@ericsson.com>
-#
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -31,14 +28,13 @@ from ceilometerclient.v2 import statistics
 from ceilometerclient.v2 import trait_descriptions
 from ceilometerclient.v2 import traits
 from keystoneauth1 import exceptions as ka_exc
-from keystoneclient import exceptions as kc_exc
 
 
 class Client(object):
     """Client for the Ceilometer v2 API.
 
-    :param session: a keystoneauth/keystoneclient session object
-    :type session: keystoneclient.session.Session
+    :param session: a keystoneauth session object
+    :type session: keystoneauth1.session.Session
     :param str service_type: The default service_type for URL discovery
     :param str service_name: The default service_name for URL discovery
     :param str interface: The default interface for URL discovery
@@ -47,7 +43,7 @@ class Client(object):
     :param str endpoint_override: Always use this endpoint URL for requests
                                   for this ceiloclient
     :param auth: An auth plugin to use instead of the session one
-    :type auth: keystoneclient.auth.base.BaseAuthPlugin
+    :type auth: keystoneauth1.plugin.BaseAuthPlugin
     :param str user_agent: The User-Agent string to set
                            (Default is python-ceilometer-client)
     :param int connect_retries: the maximum number of retries that should be
@@ -112,8 +108,8 @@ class Client(object):
             kwargs['auth_plugin'] = ceiloclient.get_auth_plugin(
                 aodh_endpoint, **kwargs)
         else:
-            # Users may just provided ceilometer endpoint and token, and no
-            # auth_url, in this case, we need 'aodh_endpoint' also
+            # Users may just provide ceilometer endpoint and token, and no
+            # auth_url, in this case, we need 'aodh_endpoint' also to be
             # provided, otherwise we cannot get aodh endpoint from
             # keystone, and assume aodh is unavailable.
             return None
@@ -125,7 +121,7 @@ class Client(object):
             return c
         except ka_exc.EndpointNotFound:
             return None
-        except kc_exc.EndpointNotFound:
+        except requests.exceptions.ConnectionError:
             return None
         except requests.exceptions.ConnectionError:
             return None
