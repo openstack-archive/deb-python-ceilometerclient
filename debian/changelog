@@ -11,6 +11,7 @@ python-ceilometerclient (2.5.0-1) UNRELEASED; urgency=medium
   * d/gbp.conf: Update debian-branch for Newton.
   * d/control: Align (Build-)Depends with upstream.
   * d/p/skip-tests.patch: Rebased.
+  * ceilometerclient/v2/client.py: Copy from orig tar file.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Wed, 03 Aug 2016 16:20:56 -0400
 

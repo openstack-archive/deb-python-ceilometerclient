@@ -123,5 +123,3 @@ class Client(object):
             return None
         except requests.exceptions.ConnectionError:
             return None
-        except requests.exceptions.ConnectionError:
-            return None
