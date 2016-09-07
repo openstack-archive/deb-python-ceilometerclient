@@ -1,4 +1,5 @@
 [gerrit]
 host=review.openstack.org
 port=29418
-project=openstack/python-ceilometerclient.git
+project=openstack/deb-python-ceilometerclient.git
+defaultbranch=debian/newton
