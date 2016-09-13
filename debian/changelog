@@ -1,4 +1,4 @@
-python-ceilometerclient (2.5.0-1) UNRELEASED; urgency=medium
+python-ceilometerclient (2.6.1-1) experimental; urgency=medium
 
   [ Ondřej Nový ]
   * Standards-Version is 3.9.8 now (no change)
@@ -10,10 +10,15 @@ python-ceilometerclient (2.5.0-1) UNRELEASED; urgency=medium
   * .gitreview: Copy from orig tar file.
   * d/gbp.conf: Update debian-branch for Newton.
   * d/control: Align (Build-)Depends with upstream.
-  * d/p/skip-tests.patch: Rebased.
   * ceilometerclient/v2/client.py: Copy from orig tar file.
 
- -- Corey Bryant <corey.bryant@canonical.com>  Wed, 03 Aug 2016 16:20:56 -0400
+  [ Thomas Goirand ]
+  * New upstream release.
+  * Using pkgos-dh_auto_{install,test} from openstack-pkg-tools >= 52~.
+  * Using OpenStack's Gerrit as VCS URLs.
+  * d/p/skip-tests.patch: deleted.
+
+ -- Thomas Goirand <zigo@debian.org>  Tue, 13 Sep 2016 09:48:32 +0200
 
 python-ceilometerclient (2.4.0-2) unstable; urgency=medium
 

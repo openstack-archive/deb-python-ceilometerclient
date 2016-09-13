@@ -6,7 +6,7 @@ Uploaders: Thomas Goirand <zigo@debian.org>,
            Corey Bryant <corey.bryant@canonical.com>,
 Build-Depends: debhelper (>= 9),
                dh-python,
-               openstack-pkg-tools,
+               openstack-pkg-tools (>= 52~),
                python-all,
                python-pbr (>= 1.8),
                python-setuptools,
@@ -48,8 +48,8 @@ Build-Depends-Indep: python-coverage,
                      subunit,
                      testrepository,
 Standards-Version: 3.9.8
-Vcs-Browser: https://anonscm.debian.org/cgit/openstack/python-ceilometerclient.git/
-Vcs-Git: https://anonscm.debian.org/git/openstack/python-ceilometerclient.git
+Vcs-Browser: https://git.openstack.org/cgit/openstack/deb-python-ceilometerclient
+Vcs-Git: https://git.openstack.org/openstack/deb-python-ceilometerclient
 Homepage: http://www.openstack.org
 XS-Testsuite: autopkgtest
 
