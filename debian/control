@@ -48,8 +48,8 @@ Build-Depends-Indep: python-coverage,
                      subunit,
                      testrepository,
 Standards-Version: 3.9.8
-Vcs-Browser: https://git.openstack.org/cgit/openstack/deb-python-ceilometerclient
-Vcs-Git: https://git.openstack.org/openstack/deb-python-ceilometerclient
+Vcs-Browser: https://git.openstack.org/cgit/openstack/deb-python-ceilometerclient?h=debian%2Fnewton
+Vcs-Git: https://git.openstack.org/openstack/deb-python-ceilometerclient -b debian/newton
 Homepage: http://www.openstack.org
 XS-Testsuite: autopkgtest
 
